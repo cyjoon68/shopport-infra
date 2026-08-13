@@ -48,6 +48,7 @@ jobs:
           abort "KEDA policy must target asset-result only" unless policy.include?(%q(Resource = aws_sqs_queue.asset_result.arn)) && !policy.include?(%q(aws_sqs_queue.outbox.arn));
           abort "KEDA policy must not grant KMS or SQS data-plane access" if policy.match?(/kms:|sqs:(DeleteMessage|ReceiveMessage|SendMessage)/);
           abort "workload SQS policy must not grant outbox access" unless workload_policy.include?(%q(Resource = aws_sqs_queue.asset_result.arn)) && !workload_policy.include?(%q(aws_sqs_queue.outbox.arn));
+          abort "workload SQS actions must be receive and delete only" unless workload_policy.scan(/sqs:[A-Za-z]+/).uniq.sort == %w[sqs:DeleteMessage sqs:ReceiveMessage];
           abort "runtime secret must not expose the unused outbox queue" if runtime_secret.include?(%q(SQS_OUTBOX_URL));
           abort "KEDA association must target keda-operator" unless association.include?(%q(namespace       = "keda")) && association.include?(%q(service_account = "keda-operator")) && association.include?(%q(role_arn        = aws_iam_role.keda.arn));
           abort "raw S3 notification must select original uploads only" unless notification.include?(%q(filter_prefix       = "uploads/")) && notification.include?(%q(filter_suffix       = "/original"));

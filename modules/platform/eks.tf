@@ -377,7 +377,7 @@ resource "aws_iam_role_policy" "workload" {
       },
       {
         Effect   = "Allow"
-        Action   = ["sqs:DeleteMessage", "sqs:GetQueueAttributes", "sqs:GetQueueUrl", "sqs:ReceiveMessage", "sqs:SendMessage"]
+        Action   = ["sqs:DeleteMessage", "sqs:ReceiveMessage"]
         Resource = aws_sqs_queue.asset_result.arn
       },
       {
