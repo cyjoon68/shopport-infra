@@ -53,6 +53,13 @@ jobs:
           --set image.api.digest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
           --set image.worker.digest=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
           > rendered.yaml
+      - name: Verify worker replica floor
+        run: >-
+          ruby -e 'require "yaml";
+          scaled = YAML.load_stream(File.read("rendered.yaml")).find { |document| document.is_a?(Hash) && document["kind"] == "ScaledObject" && document.dig("metadata", "name") == "shopport-shopport-worker" };
+          abort "worker ScaledObject not found" unless scaled;
+          abort "worker minReplicaCount must be at least 1" unless scaled.dig("spec", "minReplicaCount").to_i >= 1;
+          abort "worker idleReplicaCount must be omitted" if scaled.fetch("spec", {}).key?("idleReplicaCount")'
       - uses: docker://ghcr.io/yannh/kubeconform:v0.7.0
         with:
           args: -strict -summary -ignore-missing-schemas /github/workspace/rendered.yaml

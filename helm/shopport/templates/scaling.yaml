@@ -53,7 +53,6 @@ spec:
     name: {{ include "shopport.fullname" . }}-worker
   pollingInterval: 10
   cooldownPeriod: 120
-  idleReplicaCount: 0
   minReplicaCount: {{ .Values.worker.minReplicas }}
   maxReplicaCount: {{ .Values.worker.maxReplicas }}
   fallback:
