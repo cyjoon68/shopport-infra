@@ -36,6 +36,8 @@ jobs:
           security = File.read("modules/platform/security.tf");
           role = source.split(%q(resource "aws_iam_role" "keda"), 2).fetch(1).split(%q(resource "aws_iam_role_policy" "keda"), 2).fetch(0);
           policy = source.split(%q(resource "aws_iam_role_policy" "keda"), 2).fetch(1).split(%q(resource "aws_eks_pod_identity_association" "keda"), 2).fetch(0);
+          workload_policy = source.split(%q(resource "aws_iam_role_policy" "workload"), 2).fetch(1).split(%q(resource "aws_eks_pod_identity_association" "workload"), 2).fetch(0);
+          runtime_secret = File.read("modules/platform/data.tf").split(%q(resource "aws_secretsmanager_secret_version" "runtime"), 2).fetch(1).split(%q(resource "aws_secretsmanager_secret" "credentials"), 2).fetch(0);
           association = source.split(%q(resource "aws_eks_pod_identity_association" "keda"), 2).fetch(1).split(%q(resource "aws_ecr_repository" "api"), 2).fetch(0);
           ecr_policy = source.split(%q(resource "aws_ecr_repository_policy" "image_processor_lambda"), 2).fetch(1).split(%q(resource "aws_iam_role" "workload"), 2).fetch(0);
           lambda_function = storage.split(%q(resource "aws_lambda_function" "image_processor"), 2).fetch(1).split(%q(resource "aws_cloudwatch_log_group" "lambda"), 2).fetch(0);
@@ -43,8 +45,10 @@ jobs:
           cloudfront_kms = security.split(%q(Sid       = "CloudFrontOACReadOnly"), 2).fetch(1).split(%q(Sid       = "EventBridge"), 2).fetch(0);
           abort "KEDA role must trust EKS Pod Identity" unless role.include?(%q(Principal = { Service = "pods.eks.amazonaws.com" })) && role.include?(%q(["sts:AssumeRole", "sts:TagSession"]));
           abort "KEDA policy action must be GetQueueAttributes only" unless policy.include?(%q(Action   = "sqs:GetQueueAttributes")) && policy.scan(/sqs:[A-Za-z]+/).uniq == %w[sqs:GetQueueAttributes];
-          abort "KEDA policy must target asset-result and outbox only" unless policy.include?(%q(Resource = [aws_sqs_queue.asset_result.arn, aws_sqs_queue.outbox.arn]));
+          abort "KEDA policy must target asset-result only" unless policy.include?(%q(Resource = aws_sqs_queue.asset_result.arn)) && !policy.include?(%q(aws_sqs_queue.outbox.arn));
           abort "KEDA policy must not grant KMS or SQS data-plane access" if policy.match?(/kms:|sqs:(DeleteMessage|ReceiveMessage|SendMessage)/);
+          abort "workload SQS policy must not grant outbox access" unless workload_policy.include?(%q(Resource = aws_sqs_queue.asset_result.arn)) && !workload_policy.include?(%q(aws_sqs_queue.outbox.arn));
+          abort "runtime secret must not expose the unused outbox queue" if runtime_secret.include?(%q(SQS_OUTBOX_URL));
           abort "KEDA association must target keda-operator" unless association.include?(%q(namespace       = "keda")) && association.include?(%q(service_account = "keda-operator")) && association.include?(%q(role_arn        = aws_iam_role.keda.arn));
           abort "raw S3 notification must select original uploads only" unless notification.include?(%q(filter_prefix       = "uploads/")) && notification.include?(%q(filter_suffix       = "/original"));
           abort "image processor ECR policy must target its repository" unless ecr_policy.include?(%q(repository = aws_ecr_repository.image_processor.name));
@@ -95,6 +99,10 @@ jobs:
           abort "worker ScaledObject not found" unless scaled;
           abort "worker minReplicaCount must be at least 1" unless scaled.dig("spec", "minReplicaCount").to_i >= 1;
           abort "worker idleReplicaCount must be omitted" if scaled.fetch("spec", {}).key?("idleReplicaCount");
+          triggers = scaled.dig("spec", "triggers") || [];
+          abort "worker must have exactly one SQS trigger" unless triggers.length == 1 && triggers.first["type"] == "aws-sqs-queue";
+          abort "worker SQS trigger must use asset-result only" unless triggers.first.dig("metadata", "queueURLFromEnv") == "SQS_ASSET_RESULT_URL";
+          abort "unused outbox queue must not be rendered" if rendered.include?("SQS_OUTBOX_URL");
           abort "KEDA TriggerAuthentication provider must be aws" unless authentication&.dig("spec", "podIdentity", "provider") == "aws";
           abort "legacy aws-eks provider must be absent" if rendered.include?("aws-eks");
           %w[api worker].each do |component|

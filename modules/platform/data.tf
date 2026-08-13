@@ -346,7 +346,6 @@ resource "aws_secretsmanager_secret_version" "runtime" {
     REDIS_URL               = "rediss://:${random_password.redis.result}@${aws_elasticache_replication_group.this.primary_endpoint_address}:6379"
     OPENSEARCH_URL          = "https://${aws_opensearch_domain.this.endpoint}"
     SQS_ASSET_RESULT_URL    = aws_sqs_queue.asset_result.url
-    SQS_OUTBOX_URL          = aws_sqs_queue.outbox.url
     RAW_ASSET_BUCKET        = aws_s3_bucket.this["raw"].id
     NORMALIZED_ASSET_BUCKET = aws_s3_bucket.this["normalized"].id
     ARCHIVE_BUCKET          = aws_s3_bucket.this["archive"].id

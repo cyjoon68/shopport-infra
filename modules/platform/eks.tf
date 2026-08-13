@@ -286,7 +286,7 @@ resource "aws_iam_role_policy" "keda" {
     Statement = [{
       Effect   = "Allow"
       Action   = "sqs:GetQueueAttributes"
-      Resource = [aws_sqs_queue.asset_result.arn, aws_sqs_queue.outbox.arn]
+      Resource = aws_sqs_queue.asset_result.arn
     }]
   })
 }
@@ -378,7 +378,7 @@ resource "aws_iam_role_policy" "workload" {
       {
         Effect   = "Allow"
         Action   = ["sqs:DeleteMessage", "sqs:GetQueueAttributes", "sqs:GetQueueUrl", "sqs:ReceiveMessage", "sqs:SendMessage"]
-        Resource = [aws_sqs_queue.asset_result.arn, aws_sqs_queue.outbox.arn]
+        Resource = aws_sqs_queue.asset_result.arn
       },
       {
         Effect   = "Allow"
