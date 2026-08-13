@@ -10,7 +10,7 @@ The image processor is invoked only by `ObjectCreated` events from the raw asset
 
 Terraform creates the `shopport-ENV/credentials` secret container. Dev also receives an empty JSON object so a credentials-free fake-adapter deployment can start. Staging and prod intentionally receive no secret version. Their ExternalSecret remains unsynchronized until an operator supplies a valid `AWSCURRENT` JSON payload through the approved secret-management process.
 
-Supply credentials before the first staging or prod Argo sync. Do not put credential values in Terraform variables, Helm values, CI logs, or this repository.
+Supply credentials before the first staging or prod Argo sync. Production requires `COMMAND_CODE_API_KEY` in the credentials secret. The non-secret `COMMAND_CODE_MODEL` is pinned to `gpt-5.4-mini` by Helm. Do not put credential values in Terraform variables, Helm values, CI logs, or this repository.
 
 ## Queue migration
 
