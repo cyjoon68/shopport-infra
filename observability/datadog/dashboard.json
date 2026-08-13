@@ -1,0 +1,164 @@
+{
+  "title": "Shopport production overview",
+  "description": "API, AI streaming, providers, queues, and AWS data stores. Prompts, images, tokens, and signed purchase URLs are excluded from telemetry.",
+  "layout_type": "ordered",
+  "reflow_type": "fixed",
+  "tags": [
+    "application:shopport",
+    "environment:prod"
+  ],
+  "template_variables": [
+    {
+      "name": "env",
+      "prefix": "env",
+      "available_values": [
+        "dev",
+        "staging",
+        "prod"
+      ],
+      "default": "prod"
+    }
+  ],
+  "widgets": [
+    {
+      "definition": {
+        "title": "GraphQL p95 and errors",
+        "type": "timeseries",
+        "requests": [
+          {
+            "display_type": "line",
+            "q": "p95:trace.http.server.request.duration{service:shopport-api,resource_name:post_/graphql,env:$env}",
+            "style": {
+              "palette": "dog_classic",
+              "line_type": "solid",
+              "line_width": "normal"
+            }
+          },
+          {
+            "display_type": "line",
+            "q": "sum:trace.http.server.request.errors{service:shopport-api,resource_name:post_/graphql,env:$env}.as_rate()",
+            "on_right_yaxis": true,
+            "style": {
+              "palette": "warm",
+              "line_type": "solid",
+              "line_width": "normal"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "title": "AI latency and concurrency",
+        "type": "timeseries",
+        "requests": [
+          {
+            "display_type": "line",
+            "q": "p95:shopport.ai.first_chunk_ms{env:$env}"
+          },
+          {
+            "display_type": "line",
+            "q": "p95:shopport.ai.total_ms{env:$env}"
+          },
+          {
+            "display_type": "area",
+            "q": "max:shopport.ai.concurrent_streams{env:$env}",
+            "on_right_yaxis": true
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "title": "Stream reconnect and quota denial",
+        "type": "timeseries",
+        "requests": [
+          {
+            "display_type": "bars",
+            "q": "sum:shopport.ai.reconnect{env:$env}.as_count()"
+          },
+          {
+            "display_type": "bars",
+            "q": "sum:shopport.quota.denied{env:$env}.as_count()"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "title": "Provider failures and zero results",
+        "type": "timeseries",
+        "requests": [
+          {
+            "display_type": "bars",
+            "q": "sum:shopport.provider.failure{env:$env} by {provider_id}.as_count()"
+          },
+          {
+            "display_type": "bars",
+            "q": "sum:shopport.provider.zero_result{env:$env} by {provider_id}.as_count()"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "title": "SQS lag and DLQ",
+        "type": "timeseries",
+        "requests": [
+          {
+            "display_type": "line",
+            "q": "max:aws.sqs.approximate_age_of_oldest_message{application:shopport,env:$env} by {queuename}"
+          },
+          {
+            "display_type": "bars",
+            "q": "max:aws.sqs.approximate_number_of_messages_visible{application:shopport,env:$env,queuename:*dlq} by {queuename}"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "title": "Aurora connections and failover",
+        "type": "timeseries",
+        "requests": [
+          {
+            "display_type": "line",
+            "q": "max:aws.rds.database_connections{application:shopport,env:$env} by {dbinstanceidentifier}"
+          },
+          {
+            "display_type": "bars",
+            "q": "sum:aws.rds.engine_uptime{application:shopport,env:$env}.rollup(delta)"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "title": "Redis evictions",
+        "type": "timeseries",
+        "requests": [
+          {
+            "display_type": "bars",
+            "q": "sum:aws.elasticache.evictions{application:shopport,env:$env} by {cacheclusterid}.as_count()"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "title": "OpenSearch latency",
+        "type": "timeseries",
+        "requests": [
+          {
+            "display_type": "line",
+            "q": "p95:aws.es.search_latency{application:shopport,env:$env}"
+          },
+          {
+            "display_type": "line",
+            "q": "p95:aws.es.indexing_latency{application:shopport,env:$env}"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+environment: prod
+app:
+  nodeEnv: production
+  catalogMode: approved
+  allowDemoAuth: "false"
+api:
+  replicas: 3
+  autoscaling: { minReplicas: 3, maxReplicas: 100, cpuUtilization: 60, memoryUtilization: 70 }
+worker:
+  minReplicas: 1
+  maxReplicas: 200
+secrets:
+  runtimeRemoteKey: shopport-prod/runtime
+  credentialsRemoteKey: shopport-prod/credentials

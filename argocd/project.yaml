@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: shopport
+  namespace: argocd
+spec:
+  description: Shopport workloads and platform add-ons
+  sourceRepos:
+    - https://github.com/cyjoon68/shopport-infra.git
+    - https://aws.github.io/eks-charts
+    - https://charts.external-secrets.io
+    - https://kedacore.github.io/charts
+    - https://helm.datadoghq.com
+    - https://kubernetes-sigs.github.io/external-dns
+    - public.ecr.aws/karpenter
+  destinations:
+    - namespace: '*'
+      server: '*'
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  orphanedResources:
+    warn: true

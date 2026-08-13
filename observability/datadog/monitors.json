@@ -1,0 +1,103 @@
+[
+  {
+    "name": "Shopport API 5xx rate",
+    "type": "query alert",
+    "query": "sum(last_5m):sum:trace.http.server.request.errors{service:shopport-api,env:prod}.as_count() / sum:trace.http.server.request.hits{service:shopport-api,env:prod}.as_count() > 0.01",
+    "message": "API 5xx rate exceeded 1%. Investigate the correlated trace and execute the rollback runbook.",
+    "tags": [
+      "application:shopport",
+      "severity:page"
+    ],
+    "options": {
+      "thresholds": {
+        "critical": 0.01,
+        "warning": 0.005
+      },
+      "notify_no_data": false,
+      "require_full_window": true
+    }
+  },
+  {
+    "name": "Shopport AI first chunk p95",
+    "type": "query alert",
+    "query": "avg(last_10m):p95:shopport.ai.first_chunk_ms{env:prod} > 3000",
+    "message": "AI first-chunk p95 exceeded 3 seconds. Inspect provider and Redis durability latency.",
+    "tags": [
+      "application:shopport",
+      "severity:ticket"
+    ],
+    "options": {
+      "thresholds": {
+        "critical": 3000,
+        "warning": 2000
+      },
+      "notify_no_data": false
+    }
+  },
+  {
+    "name": "Shopport DLQ visible messages",
+    "type": "query alert",
+    "query": "max(last_5m):max:aws.sqs.approximate_number_of_messages_visible{application:shopport,env:prod,queuename:*dlq} > 0",
+    "message": "A Shopport DLQ contains messages. Stop blind redrive; inspect payload metadata and the redrive runbook.",
+    "tags": [
+      "application:shopport",
+      "severity:page"
+    ],
+    "options": {
+      "thresholds": {
+        "critical": 0
+      },
+      "notify_no_data": false
+    }
+  },
+  {
+    "name": "Shopport SQS queue age",
+    "type": "query alert",
+    "query": "max(last_10m):max:aws.sqs.approximate_age_of_oldest_message{application:shopport,env:prod,!queuename:*dlq} > 300",
+    "message": "Queue lag exceeded five minutes. Inspect KEDA, worker capacity, and provider failures.",
+    "tags": [
+      "application:shopport",
+      "severity:page"
+    ],
+    "options": {
+      "thresholds": {
+        "critical": 300,
+        "warning": 120
+      },
+      "notify_no_data": false
+    }
+  },
+  {
+    "name": "Shopport Redis evictions",
+    "type": "query alert",
+    "query": "sum(last_10m):sum:aws.elasticache.evictions{application:shopport,env:prod}.as_count() > 0",
+    "message": "Redis evictions detected. Check memory pressure before stream durability entries are lost.",
+    "tags": [
+      "application:shopport",
+      "severity:page"
+    ],
+    "options": {
+      "thresholds": {
+        "critical": 0
+      },
+      "notify_no_data": false
+    }
+  },
+  {
+    "name": "Shopport OpenSearch search latency",
+    "type": "query alert",
+    "query": "avg(last_10m):p95:aws.es.search_latency{application:shopport,env:prod} > 1000",
+    "message": "OpenSearch p95 exceeded one second. Inspect cluster health and indexing pressure.",
+    "tags": [
+      "application:shopport",
+      "severity:ticket"
+    ],
+    "options": {
+      "thresholds": {
+        "critical": 1000,
+        "warning": 500
+      },
+      "notify_no_data": false
+    }
+  }
+]

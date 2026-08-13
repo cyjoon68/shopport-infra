@@ -1,0 +1,12 @@
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+backend.hcl
+terraform.tfvars
+.env
+.env.*
+!.env.example
+crash.log
+*.log
+rendered.yaml

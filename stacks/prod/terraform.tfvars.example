@@ -1,0 +1,12 @@
+aws_account_id               = "000000000000"
+hosted_zone_id               = ""
+domain_name                  = "api.example.com"
+asset_domain_name            = "assets.example.com"
+cloudfront_certificate_arn   = ""
+cloudfront_public_key        = ""
+lambda_image_uri             = ""
+ci_deploy_policy_arn         = ""
+dev_zone_name               = "dev.example.com"
+dev_zone_name_servers       = []
+staging_zone_name           = "staging.example.com"
+staging_zone_name_servers   = []

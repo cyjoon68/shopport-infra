@@ -1,0 +1,48 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "shopport.fullname" . }}-migration
+  labels:
+    {{- include "shopport.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migration
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-weight: "0"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 900
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: migration
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      securityContext:
+        {{- include "shopport.podSecurityContext" . | nindent 8 }}
+      containers:
+        - name: migration
+          image: {{ include "shopport.image" .Values.image.api }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["node", "dist/scripts/migrate.js"]
+          securityContext:
+            {{- include "shopport.containerSecurityContext" . | nindent 12 }}
+          env:
+            - { name: NODE_ENV, value: {{ .Values.app.nodeEnv | quote }} }
+            - { name: AWS_REGION, value: {{ .Values.awsRegion | quote }} }
+            - { name: CATALOG_MODE, value: {{ .Values.app.catalogMode | quote }} }
+            - { name: ALLOW_DEMO_AUTH, value: {{ .Values.app.allowDemoAuth | quote }} }
+          envFrom:
+            - secretRef: { name: {{ include "shopport.fullname" . }}-runtime }
+            - secretRef: { name: {{ include "shopport.fullname" . }}-credentials }
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { cpu: 500m, memory: 512Mi }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: tmp
+          emptyDir: { sizeLimit: 64Mi }

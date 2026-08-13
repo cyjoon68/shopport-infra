@@ -1,0 +1,22 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: shopport-dev
+  namespace: argocd
+  finalizers: [resources-finalizer.argocd.argoproj.io]
+spec:
+  project: shopport
+  source:
+    repoURL: https://github.com/cyjoon68/shopport-infra.git
+    targetRevision: develop
+    path: helm/shopport
+    helm:
+      releaseName: shopport
+      valueFiles: [values-dev.yaml]
+  destination:
+    name: shopport-dev
+    namespace: shopport
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true, ServerSideApply=true]
+    retry: { limit: 3 }

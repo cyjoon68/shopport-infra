@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "shopport.fullname" . }}-worker
+  labels:
+    {{- include "shopport.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        {{- include "shopport.labels" . | nindent 8 }}
+        app.kubernetes.io/component: worker
+      annotations:
+        ad.datadoghq.com/worker.logs: '[{"source":"nodejs","service":"shopport-worker"}]'
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      securityContext:
+        {{- include "shopport.podSecurityContext" . | nindent 8 }}
+      topologySpreadConstraints:
+        {{- include "shopport.topologySpread" (merge (dict "component" "worker") .) | nindent 8 }}
+      nodeSelector: { workload: async }
+      tolerations:
+        - { key: workload, operator: Equal, value: async, effect: NoSchedule }
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: worker
+          image: {{ include "shopport.image" .Values.image.worker }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["node", "dist/src/worker.js"]
+          securityContext:
+            {{- include "shopport.containerSecurityContext" . | nindent 12 }}
+          env:
+            - { name: NODE_ENV, value: {{ .Values.app.nodeEnv | quote }} }
+            - { name: AWS_REGION, value: {{ .Values.awsRegion | quote }} }
+            - { name: CATALOG_MODE, value: {{ .Values.app.catalogMode | quote }} }
+            - { name: ALLOW_DEMO_AUTH, value: {{ .Values.app.allowDemoAuth | quote }} }
+            - { name: OTEL_EXPORTER_OTLP_ENDPOINT, value: {{ .Values.otel.endpoint | quote }} }
+            - { name: DD_ENV, value: {{ .Values.environment | quote }} }
+            - { name: DD_SERVICE, value: shopport-worker }
+          envFrom:
+            - secretRef: { name: {{ include "shopport.fullname" . }}-runtime }
+            - secretRef: { name: {{ include "shopport.fullname" . }}-credentials }
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+          startupProbe:
+            exec: { command: ["node", "-e", "process.exit(0)"] }
+            failureThreshold: 10
+            periodSeconds: 2
+          readinessProbe:
+            exec: { command: ["node", "-e", "process.exit(0)"] }
+            periodSeconds: 10
+          livenessProbe:
+            exec: { command: ["node", "-e", "process.exit(0)"] }
+            periodSeconds: 30
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: tmp
+          emptyDir: { sizeLimit: 128Mi }

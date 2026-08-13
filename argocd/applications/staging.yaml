@@ -1,0 +1,22 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: shopport-staging
+  namespace: argocd
+  finalizers: [resources-finalizer.argocd.argoproj.io]
+spec:
+  project: shopport
+  source:
+    repoURL: https://github.com/cyjoon68/shopport-infra.git
+    targetRevision: main
+    path: helm/shopport
+    helm:
+      releaseName: shopport
+      valueFiles: [values-staging.yaml]
+  destination:
+    name: shopport-staging
+    namespace: shopport
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true, ServerSideApply=true]
+    retry: { limit: 3 }

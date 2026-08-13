@@ -1,0 +1,62 @@
+nameOverride: ""
+fullnameOverride: ""
+
+environment: dev
+awsRegion: ap-northeast-2
+
+image:
+  api:
+    repository: 000000000000.dkr.ecr.ap-northeast-2.amazonaws.com/shopport/api
+    digest: ""
+  worker:
+    repository: 000000000000.dkr.ecr.ap-northeast-2.amazonaws.com/shopport/worker
+    digest: ""
+  pullPolicy: IfNotPresent
+
+app:
+  nodeEnv: development
+  catalogMode: fake
+  allowDemoAuth: "true"
+
+serviceAccount:
+  name: shopport
+
+secrets:
+  storeName: aws-secrets-manager
+  runtimeRemoteKey: shopport-dev/runtime
+  credentialsRemoteKey: shopport-dev/credentials
+
+api:
+  replicas: 2
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { cpu: "1", memory: 1Gi }
+  autoscaling:
+    minReplicas: 2
+    maxReplicas: 20
+    cpuUtilization: 65
+    memoryUtilization: 75
+
+worker:
+  minReplicas: 0
+  maxReplicas: 100
+  queueURL: ""
+  queueLength: "5"
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { cpu: "1", memory: 1Gi }
+
+ingress:
+  enabled: false
+  host: ""
+  certificateArn: ""
+  wafArn: ""
+
+podDisruptionBudget:
+  minAvailable: 1
+
+datadog:
+  enabled: true
+
+otel:
+  endpoint: http://datadog-agent.datadog.svc.cluster.local:4318

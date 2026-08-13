@@ -1,0 +1,65 @@
+name: Deploy infrastructure
+
+on:
+  push:
+    branches: [develop, main, 'release/**']
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        required: true
+        options: [dev, staging, prod]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: infrastructure-${{ inputs.environment || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  select:
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.target.outputs.environment }}
+    steps:
+      - id: target
+        env:
+          REQUESTED_ENVIRONMENT: ${{ inputs.environment }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ -n "$REQUESTED_ENVIRONMENT" ]; then target="$REQUESTED_ENVIRONMENT";
+          elif [ "$REF_NAME" = "main" ]; then target=prod;
+          elif [[ "$REF_NAME" == release/* ]]; then target=staging;
+          else target=dev; fi
+          echo "environment=$target" >> "$GITHUB_OUTPUT"
+
+  apply:
+    needs: [select]
+    environment: ${{ needs.select.outputs.environment == 'prod' && 'production' || needs.select.outputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with: { terraform_version: 1.15.8 }
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ap-northeast-2
+      - name: Initialize
+        env:
+          STACK: ${{ needs.select.outputs.environment }}
+          STATE_BUCKET: ${{ vars.TERRAFORM_STATE_BUCKET }}
+          STATE_KMS_KEY_ARN: ${{ vars.TERRAFORM_STATE_KMS_KEY_ARN }}
+        run: terraform -chdir="stacks/$STACK" init -input=false -backend-config="bucket=$STATE_BUCKET" -backend-config="kms_key_id=$STATE_KMS_KEY_ARN"
+      - name: Plan
+        env:
+          STACK: ${{ needs.select.outputs.environment }}
+          TF_VAR_aws_account_id: ${{ vars.AWS_ACCOUNT_ID }}
+        run: terraform -chdir="stacks/$STACK" plan -input=false -out=deployment.tfplan
+      - name: Apply
+        env:
+          STACK: ${{ needs.select.outputs.environment }}
+        run: terraform -chdir="stacks/$STACK" apply -input=false deployment.tfplan

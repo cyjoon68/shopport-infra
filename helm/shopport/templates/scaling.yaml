@@ -1,0 +1,70 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "shopport.fullname" . }}-api
+  labels:
+    {{- include "shopport.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "shopport.fullname" . }}-api
+  minReplicas: {{ .Values.api.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.api.autoscaling.maxReplicas }}
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - { type: Percent, value: 100, periodSeconds: 60 }
+        - { type: Pods, value: 4, periodSeconds: 60 }
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - { type: Percent, value: 25, periodSeconds: 60 }
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: {{ .Values.api.autoscaling.cpuUtilization }} }
+    - type: Resource
+      resource:
+        name: memory
+        target: { type: Utilization, averageUtilization: {{ .Values.api.autoscaling.memoryUtilization }} }
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: {{ include "shopport.fullname" . }}-aws
+  labels:
+    {{- include "shopport.labels" . | nindent 4 }}
+spec:
+  podIdentity:
+    provider: aws-eks
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ include "shopport.fullname" . }}-worker
+  labels:
+    {{- include "shopport.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    name: {{ include "shopport.fullname" . }}-worker
+  pollingInterval: 10
+  cooldownPeriod: 120
+  idleReplicaCount: 0
+  minReplicaCount: {{ .Values.worker.minReplicas }}
+  maxReplicaCount: {{ .Values.worker.maxReplicas }}
+  fallback:
+    failureThreshold: 3
+    replicas: 1
+  triggers:
+    - type: aws-sqs-queue
+      authenticationRef:
+        name: {{ include "shopport.fullname" . }}-aws
+      metadata:
+        awsRegion: {{ .Values.awsRegion }}
+        queueURL: {{ required "worker.queueURL is required" .Values.worker.queueURL }}
+        queueLength: {{ .Values.worker.queueLength | quote }}
+        activationQueueLength: "1"
