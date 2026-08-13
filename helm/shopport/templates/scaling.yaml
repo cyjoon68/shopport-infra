@@ -65,6 +65,14 @@ spec:
         name: {{ include "shopport.fullname" . }}-aws
       metadata:
         awsRegion: {{ .Values.awsRegion }}
-        queueURL: {{ required "worker.queueURL is required" .Values.worker.queueURL }}
+        queueURLFromEnv: SQS_ASSET_RESULT_URL
+        queueLength: {{ .Values.worker.queueLength | quote }}
+        activationQueueLength: "1"
+    - type: aws-sqs-queue
+      authenticationRef:
+        name: {{ include "shopport.fullname" . }}-aws
+      metadata:
+        awsRegion: {{ .Values.awsRegion }}
+        queueURLFromEnv: SQS_OUTBOX_URL
         queueLength: {{ .Values.worker.queueLength | quote }}
         activationQueueLength: "1"

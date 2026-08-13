@@ -28,6 +28,10 @@ output "runtime_secret_arn" {
   value = aws_secretsmanager_secret.runtime.arn
 }
 
+output "credentials_secret_arn" {
+  value = aws_secretsmanager_secret.credentials.arn
+}
+
 output "redis_endpoint" {
   value     = aws_elasticache_replication_group.this.primary_endpoint_address
   sensitive = true
@@ -42,12 +46,20 @@ output "opensearch_endpoint" {
   sensitive = true
 }
 
+output "asset_result_queue_url" {
+  value = aws_sqs_queue.asset_result.url
+}
+
+output "asset_result_queue_arn" {
+  value = aws_sqs_queue.asset_result.arn
+}
+
 output "image_queue_url" {
-  value = aws_sqs_queue.image.url
+  value = aws_sqs_queue.asset_result.url
 }
 
 output "image_queue_arn" {
-  value = aws_sqs_queue.image.arn
+  value = aws_sqs_queue.asset_result.arn
 }
 
 output "outbox_queue_url" {
@@ -96,6 +108,10 @@ output "external_dns_role_arn" {
 
 output "node_role_name" {
   value = aws_iam_role.node.name
+}
+
+output "karpenter_node_role_name" {
+  value = aws_iam_role.karpenter_node.name
 }
 
 output "github_plan_role_arn" {

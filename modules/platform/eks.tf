@@ -46,8 +46,15 @@ resource "aws_eks_cluster" "this" {
     subnet_ids              = aws_subnet.private[*].id
   }
 
-  depends_on = [aws_iam_role_policy_attachment.eks_cluster]
+  depends_on = [aws_cloudwatch_log_group.eks, aws_iam_role_policy_attachment.eks_cluster]
   tags       = local.tags
+}
+
+resource "aws_cloudwatch_log_group" "eks" {
+  name              = "/aws/eks/${local.name}/cluster"
+  retention_in_days = 30
+  kms_key_id        = aws_kms_key.this.arn
+  tags              = local.tags
 }
 
 resource "aws_ec2_tag" "cluster_security_group_discovery" {
@@ -57,7 +64,7 @@ resource "aws_ec2_tag" "cluster_security_group_discovery" {
 }
 
 resource "aws_eks_addon" "this" {
-  for_each = toset(["coredns", "kube-proxy", "vpc-cni"])
+  for_each = toset(["coredns", "eks-pod-identity-agent", "kube-proxy", "vpc-cni"])
 
   cluster_name                = aws_eks_cluster.this.name
   addon_name                  = each.key
@@ -87,6 +94,39 @@ resource "aws_iam_role_policy_attachment" "node" {
   ])
   role       = aws_iam_role.node.name
   policy_arn = each.value
+}
+
+resource "aws_iam_role" "karpenter_node" {
+  name = "${local.name}-karpenter-node"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "ec2.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+  tags = merge(local.tags, { "karpenter.sh/discovery" = local.name })
+}
+
+resource "aws_iam_role_policy_attachment" "karpenter_node" {
+  for_each = toset([
+    "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
+    "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy",
+    "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy",
+    "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+  ])
+  role       = aws_iam_role.karpenter_node.name
+  policy_arn = each.value
+}
+
+resource "aws_eks_access_entry" "karpenter_node" {
+  cluster_name  = aws_eks_cluster.this.name
+  principal_arn = aws_iam_role.karpenter_node.arn
+  type          = "EC2_LINUX"
+
+  depends_on = [aws_iam_role_policy_attachment.karpenter_node]
+  tags       = local.tags
 }
 
 resource "aws_eks_node_group" "api" {
@@ -195,7 +235,7 @@ resource "aws_iam_role_policy" "karpenter" {
       {
         Effect   = "Allow"
         Action   = "iam:PassRole"
-        Resource = aws_iam_role.node.arn
+        Resource = aws_iam_role.karpenter_node.arn
       },
       {
         Effect = "Allow"
@@ -285,7 +325,12 @@ resource "aws_iam_role_policy" "workload" {
       {
         Effect   = "Allow"
         Action   = ["sqs:DeleteMessage", "sqs:GetQueueAttributes", "sqs:GetQueueUrl", "sqs:ReceiveMessage", "sqs:SendMessage"]
-        Resource = [aws_sqs_queue.image.arn, aws_sqs_queue.outbox.arn]
+        Resource = [aws_sqs_queue.asset_result.arn, aws_sqs_queue.outbox.arn]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["es:ESHttpDelete", "es:ESHttpGet", "es:ESHttpHead", "es:ESHttpPatch", "es:ESHttpPost", "es:ESHttpPut"]
+        Resource = "arn:aws:es:ap-northeast-2:${data.aws_caller_identity.current.account_id}:domain/${local.name}/*"
       },
       {
         Effect   = "Allow"

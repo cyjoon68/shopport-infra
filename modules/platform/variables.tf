@@ -40,6 +40,11 @@ variable "cloudfront_public_key" {
 variable "lambda_image_uri" {
   type    = string
   default = ""
+
+  validation {
+    condition     = var.lambda_image_uri == "" || can(regex("^[0-9]{12}\\.dkr\\.ecr\\.[a-z0-9-]+\\.amazonaws\\.com/shopport/image-processor@sha256:[a-f0-9]{64}$", var.lambda_image_uri))
+    error_message = "lambda_image_uri must be empty or an immutable shopport/image-processor ECR URI pinned by sha256 digest"
+  }
 }
 
 variable "database_instance_class" {

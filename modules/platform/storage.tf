@@ -1,5 +1,15 @@
-resource "aws_sqs_queue" "image_dlq" {
-  name                      = "${local.name}-image-dlq"
+moved {
+  from = aws_sqs_queue.image_dlq
+  to   = aws_sqs_queue.asset_result_dlq
+}
+
+moved {
+  from = aws_sqs_queue.image
+  to   = aws_sqs_queue.asset_result
+}
+
+resource "aws_sqs_queue" "asset_result_dlq" {
+  name                      = "${local.name}-asset-result-dlq"
   message_retention_seconds = 1209600
   kms_master_key_id         = aws_kms_key.this.arn
   tags                      = local.tags
@@ -12,13 +22,13 @@ resource "aws_sqs_queue" "lambda_dlq" {
   tags                      = local.tags
 }
 
-resource "aws_sqs_queue" "image" {
-  name                       = "${local.name}-image"
+resource "aws_sqs_queue" "asset_result" {
+  name                       = "${local.name}-asset-result"
   visibility_timeout_seconds = 180
   message_retention_seconds  = 345600
   kms_master_key_id          = aws_kms_key.this.arn
   redrive_policy = jsonencode({
-    deadLetterTargetArn = aws_sqs_queue.image_dlq.arn
+    deadLetterTargetArn = aws_sqs_queue.asset_result_dlq.arn
     maxReceiveCount     = 5
   })
   tags = local.tags
@@ -400,8 +410,8 @@ resource "aws_iam_role_policy" "image_processor" {
     Statement = [
       {
         Effect   = "Allow"
-        Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
-        Resource = "arn:aws:logs:ap-northeast-2:${data.aws_caller_identity.current.account_id}:*"
+        Action   = ["logs:CreateLogStream", "logs:PutLogEvents"]
+        Resource = "arn:aws:logs:ap-northeast-2:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${local.name}-image-processor:*"
       },
       {
         Effect   = "Allow"
@@ -416,7 +426,7 @@ resource "aws_iam_role_policy" "image_processor" {
       {
         Effect   = "Allow"
         Action   = "sqs:SendMessage"
-        Resource = [aws_sqs_queue.image.arn, aws_sqs_queue.lambda_dlq.arn]
+        Resource = [aws_sqs_queue.asset_result.arn, aws_sqs_queue.lambda_dlq.arn]
       },
       {
         Effect   = "Allow"
@@ -454,13 +464,23 @@ resource "aws_lambda_function" "image_processor" {
 
   environment {
     variables = {
-      IMAGE_QUEUE_URL   = aws_sqs_queue.image.url
-      NORMALIZED_BUCKET = aws_s3_bucket.this["normalized"].id
+      SQS_ASSET_RESULT_URL    = aws_sqs_queue.asset_result.url
+      NORMALIZED_ASSET_BUCKET = aws_s3_bucket.this["normalized"].id
     }
   }
 
   tracing_config { mode = "Active" }
   tags = local.tags
+
+  depends_on = [aws_cloudwatch_log_group.lambda]
+}
+
+resource "aws_cloudwatch_log_group" "lambda" {
+  count             = var.lambda_image_uri == "" ? 0 : 1
+  name              = "/aws/lambda/${local.name}-image-processor"
+  retention_in_days = 30
+  kms_key_id        = aws_kms_key.this.arn
+  tags              = local.tags
 }
 
 resource "aws_lambda_permission" "s3" {

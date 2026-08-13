@@ -2,6 +2,7 @@ nameOverride: ""
 fullnameOverride: ""
 
 environment: dev
+appEnv: dev
 awsRegion: ap-northeast-2
 
 image:
@@ -38,9 +39,8 @@ api:
     memoryUtilization: 75
 
 worker:
-  minReplicas: 0
+  minReplicas: 1
   maxReplicas: 100
-  queueURL: ""
   queueLength: "5"
   resources:
     requests: { cpu: 250m, memory: 512Mi }

@@ -35,25 +35,28 @@ jobs:
   kubernetes:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      matrix:
+        environment: [dev, staging, prod]
     steps:
       - uses: actions/checkout@v4
       - uses: azure/setup-helm@v4
         with: { version: v3.19.0 }
       - run: >-
           helm lint helm/shopport
+          --values helm/shopport/values-${{ matrix.environment }}.yaml
           --set image.api.digest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
           --set image.worker.digest=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
-          --set worker.queueURL=https://sqs.ap-northeast-2.amazonaws.com/000000000000/shopport-dev-image
       - run: >-
           helm template shopport helm/shopport --namespace shopport
+          --values helm/shopport/values-${{ matrix.environment }}.yaml
           --set image.api.digest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
           --set image.worker.digest=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
-          --set worker.queueURL=https://sqs.ap-northeast-2.amazonaws.com/000000000000/shopport-dev-image
           > rendered.yaml
       - uses: docker://ghcr.io/yannh/kubeconform:v0.7.0
         with:
           args: -strict -summary -ignore-missing-schemas /github/workspace/rendered.yaml
-      - run: ruby -e 'require "yaml"; Dir["argocd/**/*.yaml"].each { |file| YAML.load_stream(File.read(file)) }'
+      - run: ruby -e 'require "yaml"; Dir["{.github,argocd,helm/shopport}/**/*.{yaml,yml}"].reject { |file| file.include?("/templates/") }.each { |file| YAML.load_stream(File.read(file)) }'
       - run: jq empty observability/datadog/*.json
 
   secret-scan:

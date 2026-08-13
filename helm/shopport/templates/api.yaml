@@ -40,6 +40,7 @@ spec:
               containerPort: 4000
           env:
             - { name: NODE_ENV, value: {{ .Values.app.nodeEnv | quote }} }
+            - { name: APP_ENV, value: {{ .Values.appEnv | quote }} }
             - { name: PORT, value: "4000" }
             - { name: AWS_REGION, value: {{ .Values.awsRegion | quote }} }
             - { name: CATALOG_MODE, value: {{ .Values.app.catalogMode | quote }} }
