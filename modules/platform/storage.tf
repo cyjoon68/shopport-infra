@@ -472,7 +472,7 @@ resource "aws_lambda_function" "image_processor" {
   tracing_config { mode = "Active" }
   tags = local.tags
 
-  depends_on = [aws_cloudwatch_log_group.lambda]
+  depends_on = [aws_cloudwatch_log_group.lambda, aws_ecr_repository_policy.image_processor_lambda]
 }
 
 resource "aws_cloudwatch_log_group" "lambda" {
