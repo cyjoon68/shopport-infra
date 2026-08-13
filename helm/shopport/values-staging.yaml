@@ -3,6 +3,7 @@ appEnv: staging
 app:
   nodeEnv: production
   catalogMode: fake
+  aiMode: fake
   allowDemoAuth: "false"
 api:
   replicas: 2

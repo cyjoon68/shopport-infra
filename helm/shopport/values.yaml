@@ -17,6 +17,7 @@ image:
 app:
   nodeEnv: development
   catalogMode: fake
+  aiMode: fake
   allowDemoAuth: "true"
 
 serviceAccount:

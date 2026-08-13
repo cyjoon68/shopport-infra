@@ -3,6 +3,7 @@ appEnv: dev
 app:
   nodeEnv: development
   catalogMode: fake
+  aiMode: fake
   allowDemoAuth: "true"
 api:
   replicas: 2

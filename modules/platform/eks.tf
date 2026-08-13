@@ -331,6 +331,27 @@ resource "aws_ecr_repository" "image_processor" {
   tags = local.tags
 }
 
+resource "aws_ecr_repository_policy" "image_processor_lambda" {
+  repository = aws_ecr_repository.image_processor.name
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid       = "LambdaECRImageRetrievalPolicy"
+      Effect    = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+      Action    = ["ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer"]
+      Condition = {
+        StringEquals = {
+          "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+        }
+        ArnLike = {
+          "aws:SourceArn" = "arn:aws:lambda:ap-northeast-2:${data.aws_caller_identity.current.account_id}:function:${local.name}-image-processor"
+        }
+      }
+    }]
+  })
+}
+
 resource "aws_iam_role" "workload" {
   name = "${local.name}-workload"
   assume_role_policy = jsonencode({

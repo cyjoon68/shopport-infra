@@ -44,6 +44,7 @@ spec:
             - { name: PORT, value: "4000" }
             - { name: AWS_REGION, value: {{ .Values.awsRegion | quote }} }
             - { name: CATALOG_MODE, value: {{ .Values.app.catalogMode | quote }} }
+            - { name: AI_MODE, value: {{ .Values.app.aiMode | quote }} }
             - { name: ALLOW_DEMO_AUTH, value: {{ .Values.app.allowDemoAuth | quote }} }
             - { name: OTEL_EXPORTER_OTLP_ENDPOINT, value: {{ .Values.otel.endpoint | quote }} }
             - name: DD_ENV
