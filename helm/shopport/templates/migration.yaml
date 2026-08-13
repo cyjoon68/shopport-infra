@@ -35,6 +35,7 @@ spec:
             - { name: APP_ENV, value: {{ .Values.appEnv | quote }} }
             - { name: AWS_REGION, value: {{ .Values.awsRegion | quote }} }
             - { name: CATALOG_MODE, value: {{ .Values.app.catalogMode | quote }} }
+            - { name: AI_MODE, value: {{ .Values.app.aiMode | quote }} }
             - { name: ALLOW_DEMO_AUTH, value: {{ .Values.app.allowDemoAuth | quote }} }
           envFrom:
             - secretRef: { name: {{ include "shopport.fullname" . }}-runtime }

@@ -106,9 +106,10 @@ jobs:
           abort "unused outbox queue must not be rendered" if rendered.include?("SQS_OUTBOX_URL");
           abort "KEDA TriggerAuthentication provider must be aws" unless authentication&.dig("spec", "podIdentity", "provider") == "aws";
           abort "legacy aws-eks provider must be absent" if rendered.include?("aws-eks");
-          %w[api worker].each do |component|
-            deployment = documents.find { |document| document.is_a?(Hash) && document["kind"] == "Deployment" && document.dig("metadata", "name") == "shopport-shopport-#{component}" };
-            container = deployment&.dig("spec", "template", "spec", "containers")&.find { |item| item["name"] == component };
+          %w[api worker migration].each do |component|
+            kind = component == "migration" ? "Job" : "Deployment";
+            workload = documents.find { |document| document.is_a?(Hash) && document["kind"] == kind && document.dig("metadata", "name") == "shopport-shopport-#{component}" };
+            container = workload&.dig("spec", "template", "spec", "containers")&.find { |item| item["name"] == component };
             environment = container&.fetch("env", [])&.to_h { |item| [item["name"], item["value"]] };
             abort "#{component} AI_MODE must be #{ENV.fetch("EXPECTED_AI_MODE")}" unless environment&.fetch("AI_MODE", nil) == ENV.fetch("EXPECTED_AI_MODE");
           end'
