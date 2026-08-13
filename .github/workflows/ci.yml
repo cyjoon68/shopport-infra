@@ -33,12 +33,14 @@ jobs:
         run: >-
           ruby -e 'source = File.read("modules/platform/eks.tf");
           storage = File.read("modules/platform/storage.tf");
+          security = File.read("modules/platform/security.tf");
           role = source.split(%q(resource "aws_iam_role" "keda"), 2).fetch(1).split(%q(resource "aws_iam_role_policy" "keda"), 2).fetch(0);
           policy = source.split(%q(resource "aws_iam_role_policy" "keda"), 2).fetch(1).split(%q(resource "aws_eks_pod_identity_association" "keda"), 2).fetch(0);
           association = source.split(%q(resource "aws_eks_pod_identity_association" "keda"), 2).fetch(1).split(%q(resource "aws_ecr_repository" "api"), 2).fetch(0);
           ecr_policy = source.split(%q(resource "aws_ecr_repository_policy" "image_processor_lambda"), 2).fetch(1).split(%q(resource "aws_iam_role" "workload"), 2).fetch(0);
           lambda_function = storage.split(%q(resource "aws_lambda_function" "image_processor"), 2).fetch(1).split(%q(resource "aws_cloudwatch_log_group" "lambda"), 2).fetch(0);
           notification = storage.split(%q(resource "aws_s3_bucket_notification" "raw"), 2).fetch(1);
+          cloudfront_kms = security.split(%q(Sid       = "CloudFrontOACReadOnly"), 2).fetch(1).split(%q(Sid       = "EventBridge"), 2).fetch(0);
           abort "KEDA role must trust EKS Pod Identity" unless role.include?(%q(Principal = { Service = "pods.eks.amazonaws.com" })) && role.include?(%q(["sts:AssumeRole", "sts:TagSession"]));
           abort "KEDA policy action must be GetQueueAttributes only" unless policy.include?(%q(Action   = "sqs:GetQueueAttributes")) && policy.scan(/sqs:[A-Za-z]+/).uniq == %w[sqs:GetQueueAttributes];
           abort "KEDA policy must target asset-result and outbox only" unless policy.include?(%q(Resource = [aws_sqs_queue.asset_result.arn, aws_sqs_queue.outbox.arn]));
@@ -50,7 +52,12 @@ jobs:
           abort "image processor ECR policy actions are not least privilege" unless ecr_policy.scan(/ecr:[A-Za-z]+/).uniq.sort == %w[ecr:BatchGetImage ecr:GetDownloadUrlForLayer];
           abort "image processor ECR policy must be limited to the current account" unless ecr_policy.include?(%q("aws:SourceAccount" = data.aws_caller_identity.current.account_id));
           abort "image processor ECR policy must be limited to the Lambda function" unless ecr_policy.include?(%q("aws:SourceArn" = "arn:aws:lambda:ap-northeast-2:${data.aws_caller_identity.current.account_id}:function:${local.name}-image-processor"));
-          abort "Lambda must wait for its log group and ECR policy" unless lambda_function.include?(%q(depends_on = [aws_cloudwatch_log_group.lambda, aws_ecr_repository_policy.image_processor_lambda]))'
+          abort "Lambda must wait for its log group and ECR policy" unless lambda_function.include?(%q(depends_on = [aws_cloudwatch_log_group.lambda, aws_ecr_repository_policy.image_processor_lambda]));
+          abort "CloudFront KMS policy must trust the service principal" unless cloudfront_kms.include?(%q(Principal = { Service = "cloudfront.amazonaws.com" }));
+          abort "CloudFront KMS policy must grant decrypt only" unless cloudfront_kms.include?(%q(Action    = "kms:Decrypt")) && !cloudfront_kms.match?(/"kms:(?:Encrypt|GenerateDataKey|ReEncrypt)\*?"/);
+          abort "CloudFront KMS policy must target the exact distribution" unless cloudfront_kms.include?(%q("AWS:SourceArn"                    = aws_cloudfront_distribution.assets.arn));
+          abort "CloudFront KMS policy must be mediated by regional S3" unless cloudfront_kms.include?(%q("kms:ViaService"                   = "s3.ap-northeast-2.amazonaws.com"));
+          abort "CloudFront KMS policy must target the normalized bucket context" unless cloudfront_kms.include?(%q("kms:EncryptionContext:aws:s3:arn" = aws_s3_bucket.this["normalized"].arn))'
       - uses: bridgecrewio/checkov-action@v12
         with:
           directory: .
