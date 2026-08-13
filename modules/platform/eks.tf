@@ -266,6 +266,38 @@ resource "aws_eks_pod_identity_association" "karpenter" {
   role_arn        = aws_iam_role.karpenter.arn
 }
 
+resource "aws_iam_role" "keda" {
+  name = "${local.name}-keda"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "pods.eks.amazonaws.com" }
+      Action    = ["sts:AssumeRole", "sts:TagSession"]
+    }]
+  })
+  tags = local.tags
+}
+
+resource "aws_iam_role_policy" "keda" {
+  role = aws_iam_role.keda.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = "sqs:GetQueueAttributes"
+      Resource = [aws_sqs_queue.asset_result.arn, aws_sqs_queue.outbox.arn]
+    }]
+  })
+}
+
+resource "aws_eks_pod_identity_association" "keda" {
+  cluster_name    = aws_eks_cluster.this.name
+  namespace       = "keda"
+  service_account = "keda-operator"
+  role_arn        = aws_iam_role.keda.arn
+}
+
 resource "aws_ecr_repository" "api" {
   name                 = "shopport/api"
   image_tag_mutability = "IMMUTABLE"

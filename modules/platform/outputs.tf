@@ -90,6 +90,10 @@ output "karpenter_role_arn" {
   value = aws_iam_role.karpenter.arn
 }
 
+output "keda_role_arn" {
+  value = aws_iam_role.keda.arn
+}
+
 output "workload_role_arn" {
   value = aws_iam_role.workload.arn
 }

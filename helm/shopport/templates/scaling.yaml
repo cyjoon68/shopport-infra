@@ -40,7 +40,7 @@ metadata:
     {{- include "shopport.labels" . | nindent 4 }}
 spec:
   podIdentity:
-    provider: aws-eks
+    provider: aws
 ---
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject

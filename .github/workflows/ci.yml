@@ -27,6 +27,17 @@ jobs:
       - run: terraform -chdir=stacks/${{ matrix.stack }} validate
       - run: tflint --init
       - run: tflint --chdir=stacks/${{ matrix.stack }} --recursive
+      - name: Verify KEDA Pod Identity contract
+        run: >-
+          ruby -e 'source = File.read("modules/platform/eks.tf");
+          role = source.split(%q(resource "aws_iam_role" "keda"), 2).fetch(1).split(%q(resource "aws_iam_role_policy" "keda"), 2).fetch(0);
+          policy = source.split(%q(resource "aws_iam_role_policy" "keda"), 2).fetch(1).split(%q(resource "aws_eks_pod_identity_association" "keda"), 2).fetch(0);
+          association = source.split(%q(resource "aws_eks_pod_identity_association" "keda"), 2).fetch(1).split(%q(resource "aws_ecr_repository" "api"), 2).fetch(0);
+          abort "KEDA role must trust EKS Pod Identity" unless role.include?(%q(Principal = { Service = "pods.eks.amazonaws.com" })) && role.include?(%q(["sts:AssumeRole", "sts:TagSession"]));
+          abort "KEDA policy action must be GetQueueAttributes only" unless policy.include?(%q(Action   = "sqs:GetQueueAttributes")) && policy.scan(/sqs:[A-Za-z]+/).uniq == %w[sqs:GetQueueAttributes];
+          abort "KEDA policy must target asset-result and outbox only" unless policy.include?(%q(Resource = [aws_sqs_queue.asset_result.arn, aws_sqs_queue.outbox.arn]));
+          abort "KEDA policy must not grant KMS or SQS data-plane access" if policy.match?(/kms:|sqs:(DeleteMessage|ReceiveMessage|SendMessage)/);
+          abort "KEDA association must target keda-operator" unless association.include?(%q(namespace       = "keda")) && association.include?(%q(service_account = "keda-operator")) && association.include?(%q(role_arn        = aws_iam_role.keda.arn))'
       - uses: bridgecrewio/checkov-action@v12
         with:
           directory: .
@@ -53,17 +64,26 @@ jobs:
           --set image.api.digest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
           --set image.worker.digest=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
           > rendered.yaml
-      - name: Verify worker replica floor
+      - name: Verify KEDA rendered contract
         run: >-
           ruby -e 'require "yaml";
-          scaled = YAML.load_stream(File.read("rendered.yaml")).find { |document| document.is_a?(Hash) && document["kind"] == "ScaledObject" && document.dig("metadata", "name") == "shopport-shopport-worker" };
+          rendered = File.read("rendered.yaml"); documents = YAML.load_stream(rendered);
+          scaled = documents.find { |document| document.is_a?(Hash) && document["kind"] == "ScaledObject" && document.dig("metadata", "name") == "shopport-shopport-worker" };
+          authentication = documents.find { |document| document.is_a?(Hash) && document["kind"] == "TriggerAuthentication" && document.dig("metadata", "name") == "shopport-shopport-aws" };
           abort "worker ScaledObject not found" unless scaled;
           abort "worker minReplicaCount must be at least 1" unless scaled.dig("spec", "minReplicaCount").to_i >= 1;
-          abort "worker idleReplicaCount must be omitted" if scaled.fetch("spec", {}).key?("idleReplicaCount")'
+          abort "worker idleReplicaCount must be omitted" if scaled.fetch("spec", {}).key?("idleReplicaCount");
+          abort "KEDA TriggerAuthentication provider must be aws" unless authentication&.dig("spec", "podIdentity", "provider") == "aws";
+          abort "legacy aws-eks provider must be absent" if rendered.include?("aws-eks")'
       - uses: docker://ghcr.io/yannh/kubeconform:v0.7.0
         with:
           args: -strict -summary -ignore-missing-schemas /github/workspace/rendered.yaml
       - run: ruby -e 'require "yaml"; Dir["{.github,argocd,helm/shopport}/**/*.{yaml,yml}"].reject { |file| file.include?("/templates/") }.each { |file| YAML.load_stream(File.read(file)) }'
+      - name: Verify KEDA addon service account
+        run: >-
+          ruby -e 'source = File.read("argocd/applications/addons.yaml");
+          abort "KEDA addon version changed" unless source.include?(%q(version: 2.18.2));
+          abort "KEDA operator service account must be explicit" unless source.include?(%q(name: keda-operator)) && source.include?(%q(operator:))'
       - run: jq empty observability/datadog/*.json
 
   secret-scan:

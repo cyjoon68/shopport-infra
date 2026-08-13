@@ -60,9 +60,16 @@ spec:
           releaseName: '{{ .addon }}'
           values: |
             clusterName: shopport-{{ index .metadata.labels "environment" }}
+            {{ if eq .addon "keda" }}
+            serviceAccount:
+              operator:
+                create: true
+                name: keda-operator
+            {{ else }}
             serviceAccount:
               create: true
               name: {{ .addon }}
+            {{ end }}
             settings:
               clusterName: shopport-{{ index .metadata.labels "environment" }}
               interruptionQueue: shopport-{{ index .metadata.labels "environment" }}-karpenter
