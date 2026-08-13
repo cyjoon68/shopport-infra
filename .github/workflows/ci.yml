@@ -26,6 +26,8 @@ jobs:
       - run: terraform -chdir=stacks/${{ matrix.stack }} init -backend=false
       - run: terraform -chdir=stacks/${{ matrix.stack }} validate
       - run: tflint --init
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
       - run: tflint --chdir=stacks/${{ matrix.stack }} --recursive
       - name: Verify infrastructure runtime contracts
         run: >-
