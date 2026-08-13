@@ -1,7 +1,9 @@
 environment: prod
+appEnv: prod
 app:
   nodeEnv: production
   catalogMode: approved
+  aiMode: approved
   allowDemoAuth: "false"
 api:
   replicas: 3

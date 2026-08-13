@@ -20,15 +20,19 @@ terraform plan
 
 ## Kubernetes
 
-`helm/shopport` chart는 API, worker, migration PreSync Job, HPA, PDB, topology spread, read-only/non-root security context, KEDA SQS scaling을 포함한다. `argocd/applications`는 환경 overlay를 추적한다. image tag는 tag가 아니라 ECR digest만 허용한다.
+`helm/shopport` chart는 API, worker, migration PreSync Job, HPA, PDB, topology spread, read-only/non-root security context, KEDA SQS scaling을 포함한다. `argocd/applications`는 환경 overlay를 추적한다. image tag는 tag가 아니라 ECR digest만 허용한다. worker는 DB outbox dispatcher를 유지하기 위해 모든 환경에서 최소 1개 replica를 실행한다.
+
+런타임 계약과 적용 전 수동 절차는 [`docs/runtime-contracts.md`](docs/runtime-contracts.md)에 정리되어 있다.
 
 ## 검사
 
 ```bash
 terraform fmt -check -recursive
-for stack in stacks/dev stacks/staging stacks/prod; do terraform -chdir="$stack" init -backend=false; terraform -chdir="$stack" validate; done
-helm lint helm/shopport
-helm template shopport helm/shopport --set image.api.digest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --set image.worker.digest=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+for stack in dev staging prod; do terraform -chdir="stacks/$stack" init -backend=false; terraform -chdir="stacks/$stack" validate; tflint --chdir="stacks/$stack" --recursive; done
+checkov --directory . --config-file .checkov.yaml
+for environment in dev staging prod; do helm lint helm/shopport --values "helm/shopport/values-$environment.yaml" --set image.api.digest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --set image.worker.digest=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb; helm template shopport helm/shopport --namespace shopport --values "helm/shopport/values-$environment.yaml" --set image.api.digest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --set image.worker.digest=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb > "rendered-$environment.yaml"; kubeconform -strict -summary -ignore-missing-schemas "rendered-$environment.yaml"; done
+ruby -e 'require "yaml"; Dir["{.github,argocd,helm/shopport}/**/*.{yaml,yml}"].reject { |file| file.include?("/templates/") }.each { |file| YAML.load_stream(File.read(file)) }'
+jq empty observability/datadog/*.json
 ```
 
 GitHub Actions는 OIDC만 사용한다. `production` Environment reviewer가 승인한 뒤 prod overlay 변경을 허용한다. 실제 계정 ID, hosted zone, ACM ARN, Secrets Manager 값, Datadog key, Sentry auth token은 외부 입력이다.

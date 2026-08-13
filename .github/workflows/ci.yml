@@ -26,7 +26,43 @@ jobs:
       - run: terraform -chdir=stacks/${{ matrix.stack }} init -backend=false
       - run: terraform -chdir=stacks/${{ matrix.stack }} validate
       - run: tflint --init
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
       - run: tflint --chdir=stacks/${{ matrix.stack }} --recursive
+      - name: Verify infrastructure runtime contracts
+        run: >-
+          ruby -e 'source = File.read("modules/platform/eks.tf");
+          storage = File.read("modules/platform/storage.tf");
+          security = File.read("modules/platform/security.tf");
+          role = source.split(%q(resource "aws_iam_role" "keda"), 2).fetch(1).split(%q(resource "aws_iam_role_policy" "keda"), 2).fetch(0);
+          policy = source.split(%q(resource "aws_iam_role_policy" "keda"), 2).fetch(1).split(%q(resource "aws_eks_pod_identity_association" "keda"), 2).fetch(0);
+          workload_policy = source.split(%q(resource "aws_iam_role_policy" "workload"), 2).fetch(1).split(%q(resource "aws_eks_pod_identity_association" "workload"), 2).fetch(0);
+          runtime_secret = File.read("modules/platform/data.tf").split(%q(resource "aws_secretsmanager_secret_version" "runtime"), 2).fetch(1).split(%q(resource "aws_secretsmanager_secret" "credentials"), 2).fetch(0);
+          association = source.split(%q(resource "aws_eks_pod_identity_association" "keda"), 2).fetch(1).split(%q(resource "aws_ecr_repository" "api"), 2).fetch(0);
+          ecr_policy = source.split(%q(resource "aws_ecr_repository_policy" "image_processor_lambda"), 2).fetch(1).split(%q(resource "aws_iam_role" "workload"), 2).fetch(0);
+          lambda_function = storage.split(%q(resource "aws_lambda_function" "image_processor"), 2).fetch(1).split(%q(resource "aws_cloudwatch_log_group" "lambda"), 2).fetch(0);
+          notification = storage.split(%q(resource "aws_s3_bucket_notification" "raw"), 2).fetch(1);
+          cloudfront_kms = security.split(%q(Sid       = "CloudFrontOACReadOnly"), 2).fetch(1).split(%q(Sid       = "EventBridge"), 2).fetch(0);
+          abort "KEDA role must trust EKS Pod Identity" unless role.include?(%q(Principal = { Service = "pods.eks.amazonaws.com" })) && role.include?(%q(["sts:AssumeRole", "sts:TagSession"]));
+          abort "KEDA policy action must be GetQueueAttributes only" unless policy.include?(%q(Action   = "sqs:GetQueueAttributes")) && policy.scan(/sqs:[A-Za-z]+/).uniq == %w[sqs:GetQueueAttributes];
+          abort "KEDA policy must target asset-result only" unless policy.include?(%q(Resource = aws_sqs_queue.asset_result.arn)) && !policy.include?(%q(aws_sqs_queue.outbox.arn));
+          abort "KEDA policy must not grant KMS or SQS data-plane access" if policy.match?(/kms:|sqs:(DeleteMessage|ReceiveMessage|SendMessage)/);
+          abort "workload SQS policy must not grant outbox access" unless workload_policy.include?(%q(Resource = aws_sqs_queue.asset_result.arn)) && !workload_policy.include?(%q(aws_sqs_queue.outbox.arn));
+          abort "workload SQS actions must be receive and delete only" unless workload_policy.scan(/sqs:[A-Za-z]+/).uniq.sort == %w[sqs:DeleteMessage sqs:ReceiveMessage];
+          abort "runtime secret must not expose the unused outbox queue" if runtime_secret.include?(%q(SQS_OUTBOX_URL));
+          abort "KEDA association must target keda-operator" unless association.include?(%q(namespace       = "keda")) && association.include?(%q(service_account = "keda-operator")) && association.include?(%q(role_arn        = aws_iam_role.keda.arn));
+          abort "raw S3 notification must select original uploads only" unless notification.include?(%q(filter_prefix       = "uploads/")) && notification.include?(%q(filter_suffix       = "/original"));
+          abort "image processor ECR policy must target its repository" unless ecr_policy.include?(%q(repository = aws_ecr_repository.image_processor.name));
+          abort "image processor ECR policy must trust Lambda" unless ecr_policy.include?(%q(Principal = { Service = "lambda.amazonaws.com" }));
+          abort "image processor ECR policy actions are not least privilege" unless ecr_policy.scan(/ecr:[A-Za-z]+/).uniq.sort == %w[ecr:BatchGetImage ecr:GetDownloadUrlForLayer];
+          abort "image processor ECR policy must be limited to the current account" unless ecr_policy.include?(%q("aws:SourceAccount" = data.aws_caller_identity.current.account_id));
+          abort "image processor ECR policy must be limited to the Lambda function" unless ecr_policy.include?(%q("aws:SourceArn" = "arn:aws:lambda:ap-northeast-2:${data.aws_caller_identity.current.account_id}:function:${local.name}-image-processor"));
+          abort "Lambda must wait for its log group and ECR policy" unless lambda_function.include?(%q(depends_on = [aws_cloudwatch_log_group.lambda, aws_ecr_repository_policy.image_processor_lambda]));
+          abort "CloudFront KMS policy must trust the service principal" unless cloudfront_kms.include?(%q(Principal = { Service = "cloudfront.amazonaws.com" }));
+          abort "CloudFront KMS policy must grant decrypt only" unless cloudfront_kms.include?(%q(Action    = "kms:Decrypt")) && !cloudfront_kms.match?(/"kms:(?:Encrypt|GenerateDataKey|ReEncrypt)\*?"/);
+          abort "CloudFront KMS policy must target the exact distribution" unless cloudfront_kms.include?(%q("AWS:SourceArn"                    = aws_cloudfront_distribution.assets.arn));
+          abort "CloudFront KMS policy must be mediated by regional S3" unless cloudfront_kms.include?(%q("kms:ViaService"                   = "s3.ap-northeast-2.amazonaws.com"));
+          abort "CloudFront KMS policy must target the normalized bucket context" unless cloudfront_kms.include?(%q("kms:EncryptionContext:aws:s3:arn" = aws_s3_bucket.this["normalized"].arn))'
       - uses: bridgecrewio/checkov-action@v12
         with:
           directory: .
@@ -35,25 +71,57 @@ jobs:
   kubernetes:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      matrix:
+        environment: [dev, staging, prod]
     steps:
       - uses: actions/checkout@v4
       - uses: azure/setup-helm@v4
         with: { version: v3.19.0 }
       - run: >-
           helm lint helm/shopport
+          --values helm/shopport/values-${{ matrix.environment }}.yaml
           --set image.api.digest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
           --set image.worker.digest=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
-          --set worker.queueURL=https://sqs.ap-northeast-2.amazonaws.com/000000000000/shopport-dev-image
       - run: >-
           helm template shopport helm/shopport --namespace shopport
+          --values helm/shopport/values-${{ matrix.environment }}.yaml
           --set image.api.digest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
           --set image.worker.digest=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
-          --set worker.queueURL=https://sqs.ap-northeast-2.amazonaws.com/000000000000/shopport-dev-image
           > rendered.yaml
+      - name: Verify rendered runtime contracts
+        env:
+          EXPECTED_AI_MODE: ${{ matrix.environment == 'prod' && 'approved' || 'fake' }}
+        run: >-
+          ruby -e 'require "yaml";
+          rendered = File.read("rendered.yaml"); documents = YAML.load_stream(rendered);
+          scaled = documents.find { |document| document.is_a?(Hash) && document["kind"] == "ScaledObject" && document.dig("metadata", "name") == "shopport-shopport-worker" };
+          authentication = documents.find { |document| document.is_a?(Hash) && document["kind"] == "TriggerAuthentication" && document.dig("metadata", "name") == "shopport-shopport-aws" };
+          abort "worker ScaledObject not found" unless scaled;
+          abort "worker minReplicaCount must be at least 1" unless scaled.dig("spec", "minReplicaCount").to_i >= 1;
+          abort "worker idleReplicaCount must be omitted" if scaled.fetch("spec", {}).key?("idleReplicaCount");
+          triggers = scaled.dig("spec", "triggers") || [];
+          abort "worker must have exactly one SQS trigger" unless triggers.length == 1 && triggers.first["type"] == "aws-sqs-queue";
+          abort "worker SQS trigger must use asset-result only" unless triggers.first.dig("metadata", "queueURLFromEnv") == "SQS_ASSET_RESULT_URL";
+          abort "unused outbox queue must not be rendered" if rendered.include?("SQS_OUTBOX_URL");
+          abort "KEDA TriggerAuthentication provider must be aws" unless authentication&.dig("spec", "podIdentity", "provider") == "aws";
+          abort "legacy aws-eks provider must be absent" if rendered.include?("aws-eks");
+          %w[api worker migration].each do |component|
+            kind = component == "migration" ? "Job" : "Deployment";
+            workload = documents.find { |document| document.is_a?(Hash) && document["kind"] == kind && document.dig("metadata", "name") == "shopport-shopport-#{component}" };
+            container = workload&.dig("spec", "template", "spec", "containers")&.find { |item| item["name"] == component };
+            environment = container&.fetch("env", [])&.to_h { |item| [item["name"], item["value"]] };
+            abort "#{component} AI_MODE must be #{ENV.fetch("EXPECTED_AI_MODE")}" unless environment&.fetch("AI_MODE", nil) == ENV.fetch("EXPECTED_AI_MODE");
+          end'
       - uses: docker://ghcr.io/yannh/kubeconform:v0.7.0
         with:
           args: -strict -summary -ignore-missing-schemas /github/workspace/rendered.yaml
-      - run: ruby -e 'require "yaml"; Dir["argocd/**/*.yaml"].each { |file| YAML.load_stream(File.read(file)) }'
+      - run: ruby -e 'require "yaml"; Dir["{.github,argocd,helm/shopport}/**/*.{yaml,yml}"].reject { |file| file.include?("/templates/") }.each { |file| YAML.load_stream(File.read(file)) }'
+      - name: Verify KEDA addon service account
+        run: >-
+          ruby -e 'source = File.read("argocd/applications/addons.yaml");
+          abort "KEDA addon version changed" unless source.include?(%q(version: 2.18.2));
+          abort "KEDA operator service account must be explicit" unless source.include?(%q(name: keda-operator)) && source.include?(%q(operator:))'
       - run: jq empty observability/datadog/*.json
 
   secret-scan:

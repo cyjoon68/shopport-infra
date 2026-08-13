@@ -40,7 +40,7 @@ metadata:
     {{- include "shopport.labels" . | nindent 4 }}
 spec:
   podIdentity:
-    provider: aws-eks
+    provider: aws
 ---
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
@@ -53,7 +53,6 @@ spec:
     name: {{ include "shopport.fullname" . }}-worker
   pollingInterval: 10
   cooldownPeriod: 120
-  idleReplicaCount: 0
   minReplicaCount: {{ .Values.worker.minReplicas }}
   maxReplicaCount: {{ .Values.worker.maxReplicas }}
   fallback:
@@ -65,6 +64,6 @@ spec:
         name: {{ include "shopport.fullname" . }}-aws
       metadata:
         awsRegion: {{ .Values.awsRegion }}
-        queueURL: {{ required "worker.queueURL is required" .Values.worker.queueURL }}
+        queueURLFromEnv: SQS_ASSET_RESULT_URL
         queueLength: {{ .Values.worker.queueLength | quote }}
         activationQueueLength: "1"

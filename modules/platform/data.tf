@@ -280,12 +280,20 @@ resource "aws_opensearch_domain" "this" {
 
   access_policies = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Principal = { AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root" }
-      Action    = "es:ESHttp*"
-      Resource  = "arn:aws:es:ap-northeast-2:${data.aws_caller_identity.current.account_id}:domain/${local.name}/*"
-    }]
+    Statement = [
+      {
+        Effect    = "Allow"
+        Principal = { AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root" }
+        Action    = "es:ESHttp*"
+        Resource  = "arn:aws:es:ap-northeast-2:${data.aws_caller_identity.current.account_id}:domain/${local.name}/*"
+      },
+      {
+        Effect    = "Allow"
+        Principal = { AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${local.name}-workload" }
+        Action    = ["es:ESHttpDelete", "es:ESHttpGet", "es:ESHttpHead", "es:ESHttpPatch", "es:ESHttpPost", "es:ESHttpPut"]
+        Resource  = "arn:aws:es:ap-northeast-2:${data.aws_caller_identity.current.account_id}:domain/${local.name}/*"
+      }
+    ]
   })
 
   log_publishing_options {
@@ -300,7 +308,8 @@ resource "aws_opensearch_domain" "this" {
     log_type                 = "AUDIT_LOGS"
   }
 
-  tags = local.tags
+  depends_on = [aws_cloudwatch_log_resource_policy.opensearch, aws_iam_role.workload]
+  tags       = local.tags
 }
 
 resource "aws_cloudwatch_log_group" "opensearch" {
@@ -333,14 +342,33 @@ resource "aws_secretsmanager_secret" "runtime" {
 resource "aws_secretsmanager_secret_version" "runtime" {
   secret_id = aws_secretsmanager_secret.runtime.id
   secret_string = jsonencode({
-    DATABASE_URL         = "postgresql://shopport_admin:${random_password.database.result}@${aws_db_proxy.this.endpoint}:5432/shopport?sslmode=require"
-    REDIS_URL            = "rediss://:${random_password.redis.result}@${aws_elasticache_replication_group.this.primary_endpoint_address}:6379"
-    OPENSEARCH_URL       = "https://${aws_opensearch_domain.this.endpoint}"
-    SQS_ASSET_RESULT_URL = aws_sqs_queue.image.url
-    ASSET_BUCKET         = aws_s3_bucket.this["raw"].id
-    ARCHIVE_BUCKET       = aws_s3_bucket.this["archive"].id
-    ASSET_CDN_HOST       = aws_cloudfront_distribution.assets.domain_name
+    DATABASE_URL            = "postgresql://shopport_admin:${random_password.database.result}@${aws_db_proxy.this.endpoint}:5432/shopport?sslmode=require"
+    REDIS_URL               = "rediss://:${random_password.redis.result}@${aws_elasticache_replication_group.this.primary_endpoint_address}:6379"
+    OPENSEARCH_URL          = "https://${aws_opensearch_domain.this.endpoint}"
+    SQS_ASSET_RESULT_URL    = aws_sqs_queue.asset_result.url
+    RAW_ASSET_BUCKET        = aws_s3_bucket.this["raw"].id
+    NORMALIZED_ASSET_BUCKET = aws_s3_bucket.this["normalized"].id
+    ARCHIVE_BUCKET          = aws_s3_bucket.this["archive"].id
+    ASSET_BUCKET            = aws_s3_bucket.this["raw"].id
+    ASSET_CDN_HOST          = aws_cloudfront_distribution.assets.domain_name
   })
+}
+
+resource "aws_secretsmanager_secret" "credentials" {
+  name                    = "${local.name}/credentials"
+  kms_key_id              = aws_kms_key.this.arn
+  recovery_window_in_days = 30
+  tags                    = local.tags
+}
+
+resource "aws_secretsmanager_secret_version" "credentials_dev_bootstrap" {
+  count         = var.environment == "dev" ? 1 : 0
+  secret_id     = aws_secretsmanager_secret.credentials.id
+  secret_string = jsonencode({})
+
+  lifecycle {
+    ignore_changes = [secret_string]
+  }
 }
 
 resource "aws_backup_vault" "this" {

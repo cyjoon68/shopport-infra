@@ -25,6 +25,20 @@ resource "aws_kms_key" "this" {
         }
       },
       {
+        Sid       = "CloudFrontOACReadOnly"
+        Effect    = "Allow"
+        Principal = { Service = "cloudfront.amazonaws.com" }
+        Action    = "kms:Decrypt"
+        Resource  = "*"
+        Condition = {
+          StringEquals = {
+            "AWS:SourceArn"                    = aws_cloudfront_distribution.assets.arn
+            "kms:ViaService"                   = "s3.ap-northeast-2.amazonaws.com"
+            "kms:EncryptionContext:aws:s3:arn" = aws_s3_bucket.this["normalized"].arn
+          }
+        }
+      },
+      {
         Sid       = "EventBridge"
         Effect    = "Allow"
         Principal = { Service = "events.amazonaws.com" }
