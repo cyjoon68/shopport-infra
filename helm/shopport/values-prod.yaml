@@ -3,7 +3,7 @@ appEnv: prod
 app:
   nodeEnv: production
   catalogMode: approved
-  aiMode: approved
+  aiMode: commandcode
   allowDemoAuth: "false"
 api:
   replicas: 3

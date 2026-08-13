@@ -18,6 +18,7 @@ app:
   nodeEnv: development
   catalogMode: fake
   aiMode: fake
+  commandCodeModel: gpt-5.4-mini
   allowDemoAuth: "true"
 
 serviceAccount:
