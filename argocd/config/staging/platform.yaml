@@ -1,0 +1,46 @@
+apiVersion: external-secrets.io/v1
+kind: ClusterSecretStore
+metadata: { name: aws-secrets-manager }
+spec:
+  provider:
+    aws: { service: SecretsManager, region: ap-northeast-2 }
+---
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata: { name: async }
+spec:
+  role: shopport-staging-node
+  amiSelectorTerms: [{ alias: al2023@latest }]
+  subnetSelectorTerms: [{ tags: { karpenter.sh/discovery: shopport-staging } }]
+  securityGroupSelectorTerms: [{ tags: { karpenter.sh/discovery: shopport-staging } }]
+---
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata: { name: async }
+spec:
+  template:
+    metadata: { labels: { workload: async } }
+    spec:
+      nodeClassRef: { group: karpenter.k8s.aws, kind: EC2NodeClass, name: async }
+      taints: [{ key: workload, value: async, effect: NoSchedule }]
+      requirements:
+        - { key: kubernetes.io/arch, operator: In, values: [arm64] }
+        - { key: karpenter.sh/capacity-type, operator: In, values: [spot, on-demand] }
+  disruption: { consolidationPolicy: WhenEmptyOrUnderutilized, consolidateAfter: 60s }
+  limits: { cpu: "300" }
+---
+apiVersion: v1
+kind: Namespace
+metadata: { name: datadog }
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: datadog
+  namespace: datadog
+spec:
+  refreshInterval: 1h
+  secretStoreRef: { kind: ClusterSecretStore, name: aws-secrets-manager }
+  target: { name: datadog, creationPolicy: Owner }
+  dataFrom:
+    - extract: { key: shopport-staging/datadog }

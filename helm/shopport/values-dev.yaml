@@ -1,0 +1,14 @@
+environment: dev
+app:
+  nodeEnv: development
+  catalogMode: fake
+  allowDemoAuth: "true"
+api:
+  replicas: 2
+  autoscaling: { minReplicas: 2, maxReplicas: 8, cpuUtilization: 65, memoryUtilization: 75 }
+worker:
+  minReplicas: 0
+  maxReplicas: 10
+secrets:
+  runtimeRemoteKey: shopport-dev/runtime
+  credentialsRemoteKey: shopport-dev/credentials

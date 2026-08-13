@@ -1,0 +1,126 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: shopport-addons
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: [missingkey=error]
+  generators:
+    - matrix:
+        generators:
+          - clusters:
+              selector:
+                matchExpressions:
+                  - key: environment
+                    operator: In
+                    values: [dev, staging, prod]
+          - list:
+              elements:
+                - addon: aws-load-balancer-controller
+                  namespace: kube-system
+                  repo: https://aws.github.io/eks-charts
+                  chart: aws-load-balancer-controller
+                  version: 1.13.4
+                - addon: external-secrets
+                  namespace: external-secrets
+                  repo: https://charts.external-secrets.io
+                  chart: external-secrets
+                  version: 1.1.1
+                - addon: keda
+                  namespace: keda
+                  repo: https://kedacore.github.io/charts
+                  chart: keda
+                  version: 2.18.2
+                - addon: datadog
+                  namespace: datadog
+                  repo: https://helm.datadoghq.com
+                  chart: datadog
+                  version: 3.149.0
+                - addon: external-dns
+                  namespace: external-dns
+                  repo: https://kubernetes-sigs.github.io/external-dns
+                  chart: external-dns
+                  version: 1.19.0
+                - addon: karpenter
+                  namespace: karpenter
+                  repo: public.ecr.aws/karpenter
+                  chart: karpenter
+                  version: 1.8.2
+  template:
+    metadata:
+      name: '{{ index .metadata.labels "environment" }}-{{ .addon }}'
+    spec:
+      project: shopport
+      source:
+        repoURL: '{{ .repo }}'
+        chart: '{{ .chart }}'
+        targetRevision: '{{ .version }}'
+        helm:
+          releaseName: '{{ .addon }}'
+          values: |
+            clusterName: shopport-{{ index .metadata.labels "environment" }}
+            serviceAccount:
+              create: true
+              name: {{ .addon }}
+            settings:
+              clusterName: shopport-{{ index .metadata.labels "environment" }}
+              interruptionQueue: shopport-{{ index .metadata.labels "environment" }}-karpenter
+            datadog:
+              clusterName: shopport-{{ index .metadata.labels "environment" }}
+              apiKeyExistingSecret: datadog
+              appKeyExistingSecret: datadog
+              apm:
+                portEnabled: true
+              logs:
+                enabled: true
+                containerCollectAll: true
+              processAgent:
+                enabled: true
+            provider:
+              name: aws
+            policy: sync
+            registry: txt
+            txtOwnerId: shopport-{{ index .metadata.labels "environment" }}
+            agents:
+              containers:
+                agent:
+                  securityContext:
+                    readOnlyRootFilesystem: true
+      destination:
+        server: '{{ .server }}'
+        namespace: '{{ .namespace }}'
+      syncPolicy:
+        automated: { prune: true, selfHeal: true }
+        syncOptions: [CreateNamespace=true, ServerSideApply=true]
+---
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: shopport-platform-config
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: [missingkey=error]
+  generators:
+    - clusters:
+        selector:
+          matchExpressions:
+            - key: environment
+              operator: In
+              values: [dev, staging, prod]
+  template:
+    metadata:
+      name: '{{ index .metadata.labels "environment" }}-platform-config'
+    spec:
+      project: shopport
+      source:
+        repoURL: https://github.com/cyjoon68/shopport-infra.git
+        targetRevision: main
+        path: 'argocd/config/{{ index .metadata.labels "environment" }}'
+      destination:
+        server: '{{ .server }}'
+        namespace: default
+      syncPolicy:
+        automated: { prune: true, selfHeal: true }
+        syncOptions: [ServerSideApply=true]

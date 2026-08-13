@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "shopport.fullname" . }}-api
+  labels:
+    {{- include "shopport.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  replicas: {{ .Values.api.replicas }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels:
+        {{- include "shopport.labels" . | nindent 8 }}
+        app.kubernetes.io/component: api
+      annotations:
+        ad.datadoghq.com/api.logs: '[{"source":"nodejs","service":"shopport-api"}]'
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      securityContext:
+        {{- include "shopport.podSecurityContext" . | nindent 8 }}
+      topologySpreadConstraints:
+        {{- include "shopport.topologySpread" (merge (dict "component" "api") .) | nindent 8 }}
+      containers:
+        - name: api
+          image: {{ include "shopport.image" .Values.image.api }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- include "shopport.containerSecurityContext" . | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 4000
+          env:
+            - { name: NODE_ENV, value: {{ .Values.app.nodeEnv | quote }} }
+            - { name: PORT, value: "4000" }
+            - { name: AWS_REGION, value: {{ .Values.awsRegion | quote }} }
+            - { name: CATALOG_MODE, value: {{ .Values.app.catalogMode | quote }} }
+            - { name: ALLOW_DEMO_AUTH, value: {{ .Values.app.allowDemoAuth | quote }} }
+            - { name: OTEL_EXPORTER_OTLP_ENDPOINT, value: {{ .Values.otel.endpoint | quote }} }
+            - name: DD_ENV
+              value: {{ .Values.environment | quote }}
+            - { name: DD_SERVICE, value: shopport-api }
+            - name: DD_VERSION
+              value: {{ .Chart.AppVersion | quote }}
+          envFrom:
+            - secretRef: { name: {{ include "shopport.fullname" . }}-runtime }
+            - secretRef: { name: {{ include "shopport.fullname" . }}-credentials }
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+          startupProbe:
+            httpGet: { path: /health/live, port: http }
+            failureThreshold: 30
+            periodSeconds: 2
+          readinessProbe:
+            httpGet: { path: /health/ready, port: http }
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: { path: /health/live, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: tmp
+          emptyDir: { sizeLimit: 128Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "shopport.fullname" . }}-api
+  labels:
+    {{- include "shopport.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: api
+  ports:
+    - { name: http, port: 80, targetPort: http }

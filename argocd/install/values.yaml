@@ -1,0 +1,23 @@
+server:
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+  service:
+    type: ClusterIP
+repoServer:
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+controller:
+  replicas: 1
+configs:
+  params:
+    server.insecure: false
+  cm:
+    application.resourceTrackingMethod: annotation

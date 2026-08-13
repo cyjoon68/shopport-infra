@@ -1,0 +1,25 @@
+{
+  "name": "Shopport API monthly availability",
+  "description": "Successful non-5xx HTTP requests divided by all HTTP requests for the production API.",
+  "type": "metric",
+  "query": {
+    "numerator": "sum:trace.http.server.request.hits{service:shopport-api,env:prod,!http.status_code_class:5xx}.as_count()",
+    "denominator": "sum:trace.http.server.request.hits{service:shopport-api,env:prod}.as_count()"
+  },
+  "thresholds": [
+    {
+      "timeframe": "7d",
+      "target": 99.9,
+      "warning": 99.95
+    },
+    {
+      "timeframe": "30d",
+      "target": 99.9,
+      "warning": 99.95
+    }
+  ],
+  "tags": [
+    "application:shopport",
+    "environment:prod"
+  ]
+}

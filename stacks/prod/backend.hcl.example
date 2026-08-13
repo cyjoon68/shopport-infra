@@ -1,0 +1,3 @@
+bucket       = "shopport-prod-tfstate-ACCOUNT_ID"
+kms_key_id   = "arn:aws:kms:ap-northeast-2:ACCOUNT_ID:key/KEY_ID"
+use_lockfile = true
