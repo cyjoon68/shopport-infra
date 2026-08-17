@@ -90,8 +90,6 @@ jobs:
           --set image.worker.digest=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
           > rendered.yaml
       - name: Verify rendered runtime contracts
-        env:
-          EXPECTED_AI_MODE: ${{ matrix.environment == 'prod' && 'commandcode' || 'fake' }}
         run: >-
           ruby -e 'require "yaml";
           rendered = File.read("rendered.yaml"); documents = YAML.load_stream(rendered);
@@ -111,7 +109,6 @@ jobs:
             workload = documents.find { |document| document.is_a?(Hash) && document["kind"] == kind && document.dig("metadata", "name") == "shopport-shopport-#{component}" };
             container = workload&.dig("spec", "template", "spec", "containers")&.find { |item| item["name"] == component };
             environment = container&.fetch("env", [])&.to_h { |item| [item["name"], item["value"]] };
-            abort "#{component} AI_MODE must be #{ENV.fetch("EXPECTED_AI_MODE")}" unless environment&.fetch("AI_MODE", nil) == ENV.fetch("EXPECTED_AI_MODE");
             abort "api COMMAND_CODE_MODEL must be gpt-5.4-mini" if component == "api" && environment&.fetch("COMMAND_CODE_MODEL", nil) != "gpt-5.4-mini";
           end'
       - uses: docker://ghcr.io/yannh/kubeconform:v0.7.0

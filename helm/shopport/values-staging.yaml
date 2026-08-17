@@ -2,9 +2,6 @@ environment: staging
 appEnv: staging
 app:
   nodeEnv: production
-  catalogMode: fake
-  aiMode: fake
-  allowDemoAuth: "false"
 api:
   replicas: 2
   autoscaling: { minReplicas: 2, maxReplicas: 12, cpuUtilization: 65, memoryUtilization: 75 }
