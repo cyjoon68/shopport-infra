@@ -2,9 +2,6 @@ environment: prod
 appEnv: prod
 app:
   nodeEnv: production
-  catalogMode: approved
-  aiMode: commandcode
-  allowDemoAuth: "false"
 api:
   replicas: 3
   autoscaling: { minReplicas: 3, maxReplicas: 100, cpuUtilization: 60, memoryUtilization: 70 }

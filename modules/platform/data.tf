@@ -361,16 +361,6 @@ resource "aws_secretsmanager_secret" "credentials" {
   tags                    = local.tags
 }
 
-resource "aws_secretsmanager_secret_version" "credentials_dev_bootstrap" {
-  count         = var.environment == "dev" ? 1 : 0
-  secret_id     = aws_secretsmanager_secret.credentials.id
-  secret_string = jsonencode({})
-
-  lifecycle {
-    ignore_changes = [secret_string]
-  }
-}
-
 resource "aws_backup_vault" "this" {
   name        = local.name
   kms_key_arn = aws_kms_key.this.arn
