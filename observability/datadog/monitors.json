@@ -21,7 +21,7 @@
     "name": "Shopport AI first chunk p95",
     "type": "query alert",
     "query": "avg(last_10m):p95:shopport.ai.first_chunk_ms{env:prod} > 3000",
-    "message": "AI first-chunk p95 exceeded 3 seconds. Inspect provider and Redis durability latency.",
+    "message": "AI first-chunk p95 exceeded 3 seconds. Inspect provider and PostgreSQL durability latency.",
     "tags": [
       "application:shopport",
       "severity:ticket"
@@ -63,22 +63,6 @@
       "thresholds": {
         "critical": 300,
         "warning": 120
-      },
-      "notify_no_data": false
-    }
-  },
-  {
-    "name": "Shopport Redis evictions",
-    "type": "query alert",
-    "query": "sum(last_10m):sum:aws.elasticache.evictions{application:shopport,env:prod}.as_count() > 0",
-    "message": "Redis evictions detected. Check memory pressure before stream durability entries are lost.",
-    "tags": [
-      "application:shopport",
-      "severity:page"
-    ],
-    "options": {
-      "thresholds": {
-        "critical": 0
       },
       "notify_no_data": false
     }

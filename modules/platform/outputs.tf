@@ -32,15 +32,6 @@ output "credentials_secret_arn" {
   value = aws_secretsmanager_secret.credentials.arn
 }
 
-output "redis_endpoint" {
-  value     = aws_elasticache_replication_group.this.primary_endpoint_address
-  sensitive = true
-}
-
-output "redis_secret_arn" {
-  value = aws_secretsmanager_secret.redis.arn
-}
-
 output "opensearch_endpoint" {
   value     = aws_opensearch_domain.this.endpoint
   sensitive = true
