@@ -2,6 +2,8 @@
 
 서울 리전의 dev, staging, prod 계정을 동일한 Terraform module로 구성한다. 각 계정은 독립 state, KMS, VPC, EKS, Aurora PostgreSQL, Redis, OpenSearch, SQS, S3, Lambda, CloudFront, WAF를 가진다.
 
+상위 저장소의 로컬 Compose 포트는 이 저장소 루트의 `.env`에서 관리한다. `.env.example`을 `.env`로 복사한 뒤 상위 저장소에서 `make dev-core`를 실행한다.
+
 ## 배포 순서
 
 ```bash

@@ -5,7 +5,7 @@
 애플리케이션 custom metric 계약:
 
 - `shopport.ai.first_chunk_ms`, `shopport.ai.total_ms`, `shopport.ai.concurrent_streams`
-- `shopport.ai.reconnect`, `shopport.quota.denied`
+- `shopport.ai.reconnect`
 - `shopport.provider.failure`, `shopport.provider.zero_result` with low-cardinality `provider_id`
 
 request ID와 W3C `traceparent`만 상관관계에 사용한다. prompt, 이미지, access/refresh token, provider secret, full outbound URL은 tag, span, log에 기록하지 않는다.

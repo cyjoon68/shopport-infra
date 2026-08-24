@@ -70,16 +70,12 @@
     },
     {
       "definition": {
-        "title": "Stream reconnect and quota denial",
+        "title": "Stream reconnect",
         "type": "timeseries",
         "requests": [
           {
             "display_type": "bars",
             "q": "sum:shopport.ai.reconnect{env:$env}.as_count()"
-          },
-          {
-            "display_type": "bars",
-            "q": "sum:shopport.quota.denied{env:$env}.as_count()"
           }
         ]
       }
