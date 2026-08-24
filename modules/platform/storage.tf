@@ -242,6 +242,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "retained" {
       noncurrent_days = 30
       storage_class   = "STANDARD_IA"
     }
+    noncurrent_version_expiration { noncurrent_days = 35 }
   }
 }
 
