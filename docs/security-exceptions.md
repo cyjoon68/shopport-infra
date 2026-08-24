@@ -16,7 +16,7 @@
 | `CKV_AWS_339` | EKS version catalog | Terraform은 EKS `1.34`로 고정했다. 사용한 Checkov catalog가 해당 지원 버전을 아직 인식하지 못한다. AWS 지원 종료 전에 갱신한다. |
 | `CKV2_AWS_31` | WAF request logging | WAF log redaction API는 body를 완전히 제거하지 못한다. prompt 비수집 요구가 우선이므로 sampled request와 request log를 끄고 CloudWatch metrics만 사용한다. |
 | `CKV2_AWS_38`, `CKV2_AWS_39` | delegated Route 53 zones | domain/registrar와 prod root zone이 외부 입력이다. 실제 domain 제공 시 DNSSEC DS 등록과 query-log destination을 출시 게이트에서 검증한다. |
-| `CKV2_AWS_57` | Secrets Manager rotation | DB, Redis, signing/provider credential의 service별 rotation 절차와 maintenance window가 필요하다. credentials 제공 시 90일 rotation runbook을 실행하고 자동화한다. |
+| `CKV2_AWS_57` | Secrets Manager rotation | DB, signing/provider credential의 service별 rotation 절차와 maintenance window가 필요하다. credentials 제공 시 90일 rotation runbook을 실행하고 자동화한다. |
 | `CKV2_AWS_62` | S3 event notifications | raw bucket만 Lambda event source다. normalized/archive/state/log bucket은 event-driven processing 대상이 아니다. |
 | `CKV2_AWS_61` | dynamic S3 lifecycle relation | raw는 24시간 삭제, normalized/archive는 multipart abort와 noncurrent transition, state는 history transition을 가진다. Checkov가 filtered `for_each` 연결을 결합하지 못한다. |
 | `CKV2_AWS_65` | log delivery ACL | CloudFront와 S3 standard access log 전송용 bucket만 `BucketOwnerPreferred`와 `log-delivery-write` ACL이 필요하다. public ACL은 별도 public-access block으로 차단한다. |

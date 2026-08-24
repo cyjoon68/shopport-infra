@@ -78,16 +78,6 @@ resource "aws_security_group_rule" "postgres" {
   source_security_group_id = aws_eks_cluster.this.vpc_config[0].cluster_security_group_id
 }
 
-resource "aws_security_group_rule" "redis" {
-  description              = "Redis from EKS"
-  type                     = "ingress"
-  from_port                = 6379
-  to_port                  = 6379
-  protocol                 = "tcp"
-  security_group_id        = aws_security_group.data.id
-  source_security_group_id = aws_eks_cluster.this.vpc_config[0].cluster_security_group_id
-}
-
 resource "aws_security_group_rule" "opensearch" {
   description              = "OpenSearch from EKS"
   type                     = "ingress"

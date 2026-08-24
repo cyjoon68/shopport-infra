@@ -36,7 +36,6 @@ module "platform" {
   lambda_image_uri           = var.lambda_image_uri
   ci_deploy_policy_arn       = var.ci_deploy_policy_arn
   database_instance_class    = "db.r6g.large"
-  redis_node_type            = "cache.r7g.large"
   opensearch_instance_type   = "m7g.large.search"
 }
 

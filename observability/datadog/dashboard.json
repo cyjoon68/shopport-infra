@@ -130,18 +130,6 @@
     },
     {
       "definition": {
-        "title": "Redis evictions",
-        "type": "timeseries",
-        "requests": [
-          {
-            "display_type": "bars",
-            "q": "sum:aws.elasticache.evictions{application:shopport,env:$env} by {cacheclusterid}.as_count()"
-          }
-        ]
-      }
-    },
-    {
-      "definition": {
         "title": "OpenSearch latency",
         "type": "timeseries",
         "requests": [

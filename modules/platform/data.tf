@@ -3,11 +3,6 @@ resource "random_password" "database" {
   special = false
 }
 
-resource "random_password" "redis" {
-  length  = 40
-  special = false
-}
-
 resource "aws_secretsmanager_secret" "database" {
   name                    = "${local.name}/database"
   kms_key_id              = aws_kms_key.this.arn
@@ -194,43 +189,6 @@ resource "aws_db_proxy_target" "this" {
   target_group_name     = aws_db_proxy_default_target_group.this.name
 }
 
-resource "aws_elasticache_subnet_group" "this" {
-  name       = local.name
-  subnet_ids = aws_subnet.data[*].id
-}
-
-resource "aws_secretsmanager_secret" "redis" {
-  name                    = "${local.name}/redis"
-  kms_key_id              = aws_kms_key.this.arn
-  recovery_window_in_days = 30
-  tags                    = local.tags
-}
-
-resource "aws_secretsmanager_secret_version" "redis" {
-  secret_id     = aws_secretsmanager_secret.redis.id
-  secret_string = jsonencode({ authToken = random_password.redis.result })
-}
-
-resource "aws_elasticache_replication_group" "this" {
-  replication_group_id       = local.name
-  description                = "Shopport ${var.environment} Redis"
-  node_type                  = var.redis_node_type
-  port                       = 6379
-  parameter_group_name       = "default.redis7"
-  num_cache_clusters         = 3
-  automatic_failover_enabled = true
-  multi_az_enabled           = true
-  transit_encryption_enabled = true
-  at_rest_encryption_enabled = true
-  kms_key_id                 = aws_kms_key.this.arn
-  auth_token                 = random_password.redis.result
-  subnet_group_name          = aws_elasticache_subnet_group.this.name
-  security_group_ids         = [aws_security_group.data.id]
-  snapshot_retention_limit   = 7
-  apply_immediately          = false
-  tags                       = local.tags
-}
-
 resource "aws_opensearch_domain" "this" {
   domain_name    = local.name
   engine_version = "OpenSearch_2.17"
@@ -343,7 +301,6 @@ resource "aws_secretsmanager_secret_version" "runtime" {
   secret_id = aws_secretsmanager_secret.runtime.id
   secret_string = jsonencode({
     DATABASE_URL            = "postgresql://shopport_admin:${random_password.database.result}@${aws_db_proxy.this.endpoint}:5432/shopport?sslmode=require"
-    REDIS_URL               = "rediss://:${random_password.redis.result}@${aws_elasticache_replication_group.this.primary_endpoint_address}:6379"
     OPENSEARCH_URL          = "https://${aws_opensearch_domain.this.endpoint}"
     SQS_ASSET_RESULT_URL    = aws_sqs_queue.asset_result.url
     RAW_ASSET_BUCKET        = aws_s3_bucket.this["raw"].id

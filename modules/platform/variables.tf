@@ -52,11 +52,6 @@ variable "database_instance_class" {
   default = "db.r6g.large"
 }
 
-variable "redis_node_type" {
-  type    = string
-  default = "cache.r7g.large"
-}
-
 variable "opensearch_instance_type" {
   type    = string
   default = "m7g.large.search"

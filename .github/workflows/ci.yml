@@ -109,7 +109,7 @@ jobs:
             workload = documents.find { |document| document.is_a?(Hash) && document["kind"] == kind && document.dig("metadata", "name") == "shopport-shopport-#{component}" };
             container = workload&.dig("spec", "template", "spec", "containers")&.find { |item| item["name"] == component };
             environment = container&.fetch("env", [])&.to_h { |item| [item["name"], item["value"]] };
-            abort "api COMMAND_CODE_MODEL must be gpt-5.4-mini" if component == "api" && environment&.fetch("COMMAND_CODE_MODEL", nil) != "gpt-5.4-mini";
+            abort "api PROVIDER_MODEL must be gpt-5.4-mini" if component == "api" && environment&.fetch("PROVIDER_MODEL", nil) != "gpt-5.4-mini";
           end'
       - uses: docker://ghcr.io/yannh/kubeconform:v0.7.0
         with:
