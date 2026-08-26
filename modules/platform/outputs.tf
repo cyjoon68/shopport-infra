@@ -24,8 +24,16 @@ output "database_secret_arn" {
   value = aws_secretsmanager_secret.database.arn
 }
 
+output "database_app_secret_arn" {
+  value = aws_secretsmanager_secret.database_app.arn
+}
+
 output "runtime_secret_arn" {
   value = aws_secretsmanager_secret.runtime.arn
+}
+
+output "migration_secret_arn" {
+  value = aws_secretsmanager_secret.migration.arn
 }
 
 output "credentials_secret_arn" {

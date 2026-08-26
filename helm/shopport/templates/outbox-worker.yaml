@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "shopport.fullname" . }}-outbox-worker
+  labels:
+    {{- include "shopport.labels" . | nindent 4 }}
+    app.kubernetes.io/component: outbox-worker
+spec:
+  replicas: {{ .Values.outboxWorker.replicas }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: outbox-worker
+  template:
+    metadata:
+      labels:
+        {{- include "shopport.labels" . | nindent 8 }}
+        app.kubernetes.io/component: outbox-worker
+      annotations:
+        ad.datadoghq.com/outbox-worker.logs: '[{"source":"nodejs","service":"shopport-outbox-worker"}]'
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      securityContext:
+        {{- include "shopport.podSecurityContext" . | nindent 8 }}
+      topologySpreadConstraints:
+        {{- include "shopport.topologySpread" (merge (dict "component" "outbox-worker") .) | nindent 8 }}
+      nodeSelector: { workload: async }
+      tolerations:
+        - { key: workload, operator: Equal, value: async, effect: NoSchedule }
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: outbox-worker
+          image: {{ include "shopport.image" .Values.image.worker }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["node", "dist/src/outbox-worker.js"]
+          securityContext:
+            {{- include "shopport.containerSecurityContext" . | nindent 12 }}
+          env:
+            - { name: NODE_ENV, value: {{ .Values.app.nodeEnv | quote }} }
+            - { name: APP_ENV, value: {{ .Values.appEnv | quote }} }
+            - { name: AWS_REGION, value: {{ .Values.awsRegion | quote }} }
+            - { name: OTEL_EXPORTER_OTLP_ENDPOINT, value: {{ .Values.otel.endpoint | quote }} }
+            - { name: DD_ENV, value: {{ .Values.environment | quote }} }
+            - { name: DD_SERVICE, value: shopport-outbox-worker }
+          envFrom:
+            - secretRef: { name: {{ include "shopport.fullname" . }}-runtime }
+            - secretRef: { name: {{ include "shopport.fullname" . }}-credentials }
+          resources:
+            {{- toYaml .Values.outboxWorker.resources | nindent 12 }}
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: tmp
+          emptyDir: { sizeLimit: 128Mi }

@@ -10,4 +10,5 @@ worker:
   maxReplicas: 30
 secrets:
   runtimeRemoteKey: shopport-staging/runtime
+  migrationRemoteKey: shopport-staging/migration
   credentialsRemoteKey: shopport-staging/credentials
