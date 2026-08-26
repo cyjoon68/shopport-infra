@@ -22,7 +22,7 @@ terraform plan
 
 ## Kubernetes
 
-`helm/shopport` chart는 API, worker, migration PreSync Job, HPA, PDB, topology spread, read-only/non-root security context, KEDA SQS scaling을 포함한다. `argocd/applications`는 환경 overlay를 추적한다. image tag는 tag가 아니라 ECR digest만 허용한다. worker는 DB outbox dispatcher를 유지하기 위해 모든 환경에서 최소 1개 replica를 실행한다.
+`helm/shopport` chart는 API, KEDA worker, 정적 outbox dispatcher, migration PreSync Job, HPA, PDB, topology spread, read-only/non-root security context를 포함한다. `argocd/applications`는 환경 overlay를 추적한다. image tag는 tag가 아니라 ECR digest만 허용한다. outbox dispatcher는 모든 환경에서 최소 1개 replica를 실행한다.
 
 런타임 계약과 적용 전 수동 절차는 [`docs/runtime-contracts.md`](docs/runtime-contracts.md)에 정리되어 있다.
 

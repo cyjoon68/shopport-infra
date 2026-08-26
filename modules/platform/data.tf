@@ -3,6 +3,11 @@ resource "random_password" "database" {
   special = false
 }
 
+resource "random_password" "database_app" {
+  length  = 40
+  special = false
+}
+
 resource "aws_secretsmanager_secret" "database" {
   name                    = "${local.name}/database"
   kms_key_id              = aws_kms_key.this.arn
@@ -15,6 +20,22 @@ resource "aws_secretsmanager_secret_version" "database" {
   secret_string = jsonencode({
     username = "shopport_admin"
     password = random_password.database.result
+    database = "shopport"
+  })
+}
+
+resource "aws_secretsmanager_secret" "database_app" {
+  name                    = "${local.name}/database-app"
+  kms_key_id              = aws_kms_key.this.arn
+  recovery_window_in_days = 30
+  tags                    = local.tags
+}
+
+resource "aws_secretsmanager_secret_version" "database_app" {
+  secret_id = aws_secretsmanager_secret.database_app.id
+  secret_string = jsonencode({
+    username = "shopport_app"
+    password = random_password.database_app.result
     database = "shopport"
   })
 }
@@ -63,7 +84,7 @@ resource "aws_rds_cluster_parameter_group" "this" {
   }
   parameter {
     name         = "shared_preload_libraries"
-    value        = "pgaudit"
+    value        = "pg_stat_statements,pgaudit"
     apply_method = "pending-reboot"
   }
   parameter {
@@ -142,9 +163,12 @@ resource "aws_iam_role_policy" "rds_proxy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect   = "Allow"
-        Action   = "secretsmanager:GetSecretValue"
-        Resource = aws_secretsmanager_secret.database.arn
+        Effect = "Allow"
+        Action = "secretsmanager:GetSecretValue"
+        Resource = [
+          aws_secretsmanager_secret.database.arn,
+          aws_secretsmanager_secret.database_app.arn,
+        ]
       },
       {
         Effect   = "Allow"
@@ -169,6 +193,12 @@ resource "aws_db_proxy" "this" {
     auth_scheme = "SECRETS"
     iam_auth    = "DISABLED"
     secret_arn  = aws_secretsmanager_secret.database.arn
+  }
+
+  auth {
+    auth_scheme = "SECRETS"
+    iam_auth    = "DISABLED"
+    secret_arn  = aws_secretsmanager_secret.database_app.arn
   }
 
   tags = local.tags
@@ -300,7 +330,7 @@ resource "aws_secretsmanager_secret" "runtime" {
 resource "aws_secretsmanager_secret_version" "runtime" {
   secret_id = aws_secretsmanager_secret.runtime.id
   secret_string = jsonencode({
-    DATABASE_URL            = "postgresql://shopport_admin:${random_password.database.result}@${aws_db_proxy.this.endpoint}:5432/shopport?sslmode=require"
+    DATABASE_URL            = "postgresql://shopport_app:${random_password.database_app.result}@${aws_db_proxy.this.endpoint}:5432/shopport?sslmode=require"
     OPENSEARCH_URL          = "https://${aws_opensearch_domain.this.endpoint}"
     SQS_ASSET_RESULT_URL    = aws_sqs_queue.asset_result.url
     RAW_ASSET_BUCKET        = aws_s3_bucket.this["raw"].id
@@ -308,6 +338,21 @@ resource "aws_secretsmanager_secret_version" "runtime" {
     ARCHIVE_BUCKET          = aws_s3_bucket.this["archive"].id
     ASSET_BUCKET            = aws_s3_bucket.this["raw"].id
     ASSET_CDN_HOST          = aws_cloudfront_distribution.assets.domain_name
+  })
+}
+
+resource "aws_secretsmanager_secret" "migration" {
+  name                    = "${local.name}/migration"
+  kms_key_id              = aws_kms_key.this.arn
+  recovery_window_in_days = 30
+  tags                    = local.tags
+}
+
+resource "aws_secretsmanager_secret_version" "migration" {
+  secret_id = aws_secretsmanager_secret.migration.id
+  secret_string = jsonencode({
+    DATABASE_URL          = "postgresql://shopport_admin:${random_password.database.result}@${aws_db_proxy.this.endpoint}:5432/shopport?sslmode=require"
+    DATABASE_APP_PASSWORD = random_password.database_app.result
   })
 }
 

@@ -8,6 +8,9 @@ api:
 worker:
   minReplicas: 1
   maxReplicas: 200
+outboxWorker:
+  replicas: 2
 secrets:
   runtimeRemoteKey: shopport-prod/runtime
+  migrationRemoteKey: shopport-prod/migration
   credentialsRemoteKey: shopport-prod/credentials

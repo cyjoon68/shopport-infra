@@ -37,7 +37,9 @@ jobs:
           role = source.split(%q(resource "aws_iam_role" "keda"), 2).fetch(1).split(%q(resource "aws_iam_role_policy" "keda"), 2).fetch(0);
           policy = source.split(%q(resource "aws_iam_role_policy" "keda"), 2).fetch(1).split(%q(resource "aws_eks_pod_identity_association" "keda"), 2).fetch(0);
           workload_policy = source.split(%q(resource "aws_iam_role_policy" "workload"), 2).fetch(1).split(%q(resource "aws_eks_pod_identity_association" "workload"), 2).fetch(0);
-          runtime_secret = File.read("modules/platform/data.tf").split(%q(resource "aws_secretsmanager_secret_version" "runtime"), 2).fetch(1).split(%q(resource "aws_secretsmanager_secret" "credentials"), 2).fetch(0);
+          data = File.read("modules/platform/data.tf");
+          runtime_secret = data.split(%q(resource "aws_secretsmanager_secret_version" "runtime"), 2).fetch(1).split(%q(resource "aws_secretsmanager_secret" "migration"), 2).fetch(0);
+          migration_secret = data.split(%q(resource "aws_secretsmanager_secret_version" "migration"), 2).fetch(1).split(%q(resource "aws_secretsmanager_secret" "credentials"), 2).fetch(0);
           association = source.split(%q(resource "aws_eks_pod_identity_association" "keda"), 2).fetch(1).split(%q(resource "aws_ecr_repository" "api"), 2).fetch(0);
           ecr_policy = source.split(%q(resource "aws_ecr_repository_policy" "image_processor_lambda"), 2).fetch(1).split(%q(resource "aws_iam_role" "workload"), 2).fetch(0);
           lambda_function = storage.split(%q(resource "aws_lambda_function" "image_processor"), 2).fetch(1).split(%q(resource "aws_cloudwatch_log_group" "lambda"), 2).fetch(0);
@@ -50,6 +52,8 @@ jobs:
           abort "workload SQS policy must not grant outbox access" unless workload_policy.include?(%q(Resource = aws_sqs_queue.asset_result.arn)) && !workload_policy.include?(%q(aws_sqs_queue.outbox.arn));
           abort "workload SQS actions must be receive and delete only" unless workload_policy.scan(/sqs:[A-Za-z]+/).uniq.sort == %w[sqs:DeleteMessage sqs:ReceiveMessage];
           abort "runtime secret must not expose the unused outbox queue" if runtime_secret.include?(%q(SQS_OUTBOX_URL));
+          abort "runtime secret must use the least-privilege PostgreSQL role" unless runtime_secret.include?(%q(postgresql://shopport_app:));
+          abort "migration secret must hold the admin URL and app-role password" unless migration_secret.include?(%q(postgresql://shopport_admin:)) && migration_secret.include?(%q(DATABASE_APP_PASSWORD));
           abort "KEDA association must target keda-operator" unless association.include?(%q(namespace       = "keda")) && association.include?(%q(service_account = "keda-operator")) && association.include?(%q(role_arn        = aws_iam_role.keda.arn));
           abort "raw S3 notification must select original uploads only" unless notification.include?(%q(filter_prefix       = "uploads/")) && notification.include?(%q(filter_suffix       = "/original"));
           abort "image processor ECR policy must target its repository" unless ecr_policy.include?(%q(repository = aws_ecr_repository.image_processor.name));
@@ -104,12 +108,16 @@ jobs:
           abort "unused outbox queue must not be rendered" if rendered.include?("SQS_OUTBOX_URL");
           abort "KEDA TriggerAuthentication provider must be aws" unless authentication&.dig("spec", "podIdentity", "provider") == "aws";
           abort "legacy aws-eks provider must be absent" if rendered.include?("aws-eks");
-          %w[api worker migration].each do |component|
+          %w[api worker outbox-worker migration].each do |component|
             kind = component == "migration" ? "Job" : "Deployment";
             workload = documents.find { |document| document.is_a?(Hash) && document["kind"] == kind && document.dig("metadata", "name") == "shopport-shopport-#{component}" };
             container = workload&.dig("spec", "template", "spec", "containers")&.find { |item| item["name"] == component };
             environment = container&.fetch("env", [])&.to_h { |item| [item["name"], item["value"]] };
+            secret_names = container&.fetch("envFrom", [])&.map { |item| item.dig("secretRef", "name") }&.compact || [];
             abort "api PROVIDER_MODEL must be gpt-5.4-mini" if component == "api" && environment&.fetch("PROVIDER_MODEL", nil) != "gpt-5.4-mini";
+            abort "outbox worker must use its dedicated entrypoint" if component == "outbox-worker" && container&.fetch("command", nil) != ["node", "dist/src/outbox-worker.js"];
+            abort "migration must use only the admin secret" if component == "migration" && secret_names != ["shopport-shopport-migration"];
+            abort "runtime workloads must not receive the migration secret" if component != "migration" && secret_names.include?("shopport-shopport-migration");
           end'
       - uses: docker://ghcr.io/yannh/kubeconform:v0.7.0
         with:

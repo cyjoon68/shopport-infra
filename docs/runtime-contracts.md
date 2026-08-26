@@ -16,7 +16,13 @@ Supply credentials before the first Argo sync. Every environment requires `PROVI
 
 The former `shopport-ENV-image` queue is replaced by `shopport-ENV-asset-result`. Before applying, pause image ingestion and drain or redrive messages from the old queue. Apply Terraform, confirm the runtime secret contains the new queue URL, then sync the worker deployment and resume ingestion. The legacy Terraform output names remain temporarily as aliases, while new consumers should use `asset_result_queue_url` and `asset_result_queue_arn`.
 
-The Wave 1 Aurora outbox is polled directly by the baseline worker replica, so `worker.minReplicas` must remain at least 1. The SQS outbox queue is retained only as a future relay migration placeholder. It is not a KEDA activation source and is not exposed to the application or workload role until an SQS relay and consumer with idempotency are implemented.
+The Aurora outbox has a dedicated static dispatcher: one replica in dev/staging and two in prod. It alone uses PostgreSQL `LISTEN` for commit-time wakeups, claims rows with `FOR UPDATE SKIP LOCKED`, and falls back to timed polling. Do not put `LISTEN` in the KEDA-scaled worker: PostgreSQL `LISTEN` pins an RDS Proxy client session and a queue-scale-out would create a notification herd. The regular worker continues asset consumption, archival, and retention work. The SQS outbox queue remains a future relay placeholder and is not a KEDA activation source or an application secret.
+
+## PostgreSQL runtime rollout
+
+Runtime workloads use the `shopport_app` database role. The migration Job alone receives the admin connection URL and `DATABASE_APP_PASSWORD`; it creates or rotates the runtime role and grants only application DML privileges. Keep the admin Proxy secret attached during bootstrap, then let the PreSync Job create `shopport_app` before any runtime workload connects with its matching Proxy secret.
+
+`pg_stat_statements` requires `shared_preload_libraries`, which Aurora applies only after a restart. Before syncing an image that contains the migration, apply the parameter-group change, perform the approved Aurora reboot/failover, and verify both `SHOW shared_preload_libraries` and `SELECT count(*) FROM pg_stat_statements`. Only then allow the PreSync migration Job to run.
 
 ## Follow-ups outside this repository
 

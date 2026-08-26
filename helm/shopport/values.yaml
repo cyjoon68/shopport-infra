@@ -24,6 +24,7 @@ serviceAccount:
 secrets:
   storeName: aws-secrets-manager
   runtimeRemoteKey: shopport-dev/runtime
+  migrationRemoteKey: shopport-dev/migration
   credentialsRemoteKey: shopport-dev/credentials
 
 api:
@@ -44,6 +45,12 @@ worker:
   resources:
     requests: { cpu: 250m, memory: 512Mi }
     limits: { cpu: "1", memory: 1Gi }
+
+outboxWorker:
+  replicas: 1
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: 500m, memory: 512Mi }
 
 ingress:
   enabled: false

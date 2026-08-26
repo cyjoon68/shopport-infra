@@ -35,8 +35,7 @@ spec:
             - { name: APP_ENV, value: {{ .Values.appEnv | quote }} }
             - { name: AWS_REGION, value: {{ .Values.awsRegion | quote }} }
           envFrom:
-            - secretRef: { name: {{ include "shopport.fullname" . }}-runtime }
-            - secretRef: { name: {{ include "shopport.fullname" . }}-credentials }
+            - secretRef: { name: {{ include "shopport.fullname" . }}-migration }
           resources:
             requests: { cpu: 100m, memory: 256Mi }
             limits: { cpu: 500m, memory: 512Mi }
